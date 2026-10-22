@@ -1,0 +1,109 @@
+"""Stage synthetic instances and run the unchanged pinned runtime.
+
+Usage: python tools/run_isolated.py --evidence-dir ABS --host-source ABS --layer T1|T2
+All generated material goes to the explicit external evidence directory.
+"""
+from pathlib import Path
+from datetime import datetime, timezone
+import argparse
+import hashlib
+import importlib.metadata
+import json
+import os
+import shutil
+import subprocess
+import sys
+import zipfile
+import tomli_w
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+ID='davidblackcn.maibot-maihush-plugin'
+
+def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+
+def verify(host):
+    lock=json.loads((ROOT/'tests/fixtures/source-lock.json').read_text())
+    for rel,expected in lock['host_files'].items(): assert digest(host/rel)==expected,rel
+    import maibot_sdk
+    site=Path(maibot_sdk.__file__).parent.parent
+    assert importlib.metadata.version('maibot-plugin-sdk')=='2.15.0'
+    for rel,expected in lock['sdk_files'].items(): assert digest(site/rel)==expected,rel
+    return lock
+
+def stage(work,neighbors=False,package=None):
+    candidate=work/'plugins/candidate'; candidate.mkdir(parents=True)
+    if package:
+        from tools.package import allowed
+        with zipfile.ZipFile(package) as archive:
+            assert set(archive.namelist())=={'maihush/'+n for n in allowed()}
+            for name in allowed():
+                data=archive.read('maihush/'+name)
+                assert data==(ROOT/name).read_bytes(),name
+                target=candidate/name; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(data)
+    else:
+        for name in ('plugin.py','_manifest.json'): shutil.copyfile(ROOT/name,candidate/name)
+        shutil.copytree(ROOT/'maihush',candidate/'maihush',ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+        (candidate/'_locales').mkdir(); (candidate/'_locales/zh-CN.json').write_text('{}')
+    cfg={'plugin':{'config_version':'1','enabled':True},'routes':[{'enabled':True,'admin_accounts':['10001'],'owner_accounts':['10002']}]}
+    (candidate/'config.toml').write_text(tomli_w.dumps(cfg),encoding='utf8')
+    consumer=work/'plugins/consumer'; consumer.mkdir()
+    manifest=json.loads((ROOT/'_manifest.json').read_text()); manifest.update(id='maihush.test.consumer',name='Synthetic test consumer',capabilities=['api.call','send.text'])
+    (consumer/'_manifest.json').write_text(json.dumps(manifest),encoding='utf8')
+    shutil.copyfile(ROOT/'tools/test_consumer.py',consumer/'plugin.py')
+    if neighbors:
+        hashes={}
+        for folder,package in [('maibot-maivita-plugin','maivita'),('maibot-maiIdentity-plugin','maiidentity')]:
+            ref=ROOT.parent/folder; target=work/'neighbors'/folder; target.mkdir(parents=True)
+            # Read-only source staging. Do not copy user configs, databases or environments.
+            for name in ('plugin.py','_manifest.json','LICENSE'):
+                shutil.copyfile(ref/name,target/name); hashes[folder+'/'+name]=digest(ref/name)
+            for src in (ref/package).rglob('*'):
+                if src.is_file() and src.suffix in ('.py','.sql','.json') and '__pycache__' not in src.parts:
+                    rel=src.relative_to(ref); dest=target/rel; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(src,dest)
+                    hashes[folder+'/'+rel.as_posix()]=digest(src)
+            if package=='maivita':
+                cfg={'plugin':{'enabled':False,'config_version':'3'},'engine':{'mode':'life'},'instance':{'acknowledgement':'isolated-test-instance','writer_lock':str(work/'vita-writer.lock'),'allowed_streams':['synthetic-test-stream']},'model':{'generate_on_start':False}}
+            else:
+                cfg={'plugin':{'enabled':False,'config_version':'3','acknowledgement':'local-operator-reviewed','instance_id':'maihush-test','writer_lock':str(work/'identity-writer.lock')},'identity':{'adapter_namespace':'synthetic-test-adapter','route_scope':'synthetic-test-scope','accounts':[]}}
+            (target/'config.toml').write_text(tomli_w.dumps(cfg),encoding='utf8')
+        (work/'neighbor-source-hashes.json').write_text(json.dumps(hashes,indent=2),encoding='utf8')
+    return candidate
+
+def main():
+    ap=argparse.ArgumentParser(); ap.add_argument('--evidence-dir',type=Path,required=True); ap.add_argument('--host-source',type=Path,required=True); ap.add_argument('--layer',choices=['T1','T2'],required=True); ap.add_argument('--package',type=Path); args=ap.parse_args()
+    host=args.host_source.resolve(); lock=verify(host)
+    work=args.evidence_dir.resolve()/args.layer
+    if work.exists(): raise SystemExit('Choose a new evidence directory; existing evidence is preserved')
+    work.mkdir(parents=True); stage(work,neighbors=args.layer=='T2',package=args.package); shutil.copyfile(host/'pyproject.toml',work/'pyproject.toml')
+    safety=work/'safety'; safety.mkdir()
+    (safety/'sitecustomize.py').write_text("import sys\ndef audit(event,args):\n    if event=='socket.connect':\n        a=args[1]\n        if not isinstance(a,tuple) or a[0] not in ('127.0.0.1','::1'): raise PermissionError('MAIHUSH_TEST_EXTERNAL_NETWORK_DENIED')\nsys.addaudithook(audit)\n",encoding='utf8')
+    env={k:v for k,v in os.environ.items() if k.upper() in ('SYSTEMROOT','WINDIR','COMSPEC','PATHEXT','NUMBER_OF_PROCESSORS')}
+    env.update(PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1',PYTHONUNBUFFERED='1',PYTHONPATH=os.pathsep.join((str(safety),str(ROOT),str(host))),MAIBOT_INSTANCE_DIR=str(work),TEMP=str(work),TMP=str(work),USERPROFILE=str(work),MAIHUSH_TEST_LAYER=args.layer)
+    started=datetime.now(timezone.utc).isoformat()
+    runtime_files=[ROOT/'plugin.py',ROOT/'_manifest.json',*(ROOT/'maihush').rglob('*.py')]
+    fingerprint={p.relative_to(ROOT).as_posix():digest(p) for p in runtime_files}
+    process=subprocess.Popen([sys.executable,'-m','tools.native_scenario'],cwd=work,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    try: output,_=process.communicate(timeout=150)
+    except BaseException:
+        if process.poll() is None:
+            subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True); process.wait()
+        raise
+    (work/'console.log').write_bytes(output)
+    verify(host)
+    assert fingerprint=={p.relative_to(ROOT).as_posix():digest(p) for p in runtime_files}
+    metadata={'started_at':started,'finished_at':datetime.now(timezone.utc).isoformat(),
+              'command':[sys.executable,*sys.argv],'exit_code':process.returncode,
+              'python':sys.version,'source_lock_sha256':digest(ROOT/'tests/fixtures/source-lock.json'),
+              'host_files_verified':len(lock['host_files']),'sdk_files_verified':len(lock['sdk_files']),
+              'runtime_fingerprint':fingerprint,'config_sha256':digest(work/'plugins/candidate/config.toml')}
+    metadata['package_sha256']=digest(args.package) if args.package else None
+    (work/'run.json').write_text(json.dumps(metadata,indent=2),encoding='utf8')
+    if process.returncode:
+        print(output.decode('utf8',errors='replace')[-4500:])
+    else:
+        print((work/'result.json').read_text(encoding='utf8'))
+    print('exit_code=',process.returncode,'evidence=',work)
+    raise SystemExit(process.returncode)
+
+if __name__=='__main__': main()

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+config.toml
+*.sqlite3*
+*.lock
+.venv/
+.integration/
+dist/
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.wal
+*.shm

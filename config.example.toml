@@ -1,0 +1,74 @@
+# Synthetic, all routes disabled. Copy to config.toml and review locally.
+config_version = 1
+enabled = true
+instance_id = "maihush-local"
+
+[plugin]
+config_version = "1"
+enabled = true
+
+[[routes]]
+enabled = false
+platform = "qq"
+adapter_namespace = "synthetic-test-adapter"
+bot_account_id = "123456789"
+route_scope = "synthetic-test-scope"
+group_id = "987654321"
+stream_id = "synthetic-test-stream"
+owner_accounts = []
+admin_accounts = []
+other_bot_accounts = []
+
+[soft]
+enabled = true
+default_seconds = 60
+privileged_default_seconds = 120
+max_seconds = 300
+privileged_max_seconds = 600
+episode_max_seconds = 600
+group_hour_budget_seconds = 900
+requester_hour_budget_seconds = 300
+privileged_requester_hour_budget_seconds = 600
+requester_cooldown_seconds = 60
+group_candidate_cooldown_seconds = 10
+min_dwell_seconds = 10
+
+[restraint]
+min_send_interval_seconds = 30
+max_seconds = 120
+hour_budget_seconds = 600
+
+[recovery]
+duration_seconds = 60
+min_send_interval_seconds = 60
+invitation_cooldown_seconds = 60
+
+[hard]
+default_seconds = 1200
+max_seconds = 86400
+
+[decision]
+enabled = false
+task_name = ""
+model_name = ""
+timeout_seconds = 8
+candidate_ttl_seconds = 15
+max_context_messages = 12
+max_context_bytes = 4096
+max_calls_per_group_hour = 12
+max_calls_per_instance_hour = 60
+max_concurrent = 2
+queue_capacity = 64
+max_output_tokens = 256
+
+[storage]
+audit_retention_days = 7
+request_retention_hours = 24
+
+[control]
+acknowledgements_enabled = false
+
+[integrations]
+identity_h03_enabled = false
+frequency_h02_enabled = false
+receipt_h01_enabled = false
