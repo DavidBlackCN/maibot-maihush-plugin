@@ -1,0 +1,23 @@
+name: MaiHush offline checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Static and T0 (no Host, QQ or model service)
+        shell: pwsh
+        run: |
+          $env:PYTHONDONTWRITEBYTECODE='1'
+          $env:PYTHONPATH=(Get-Location).Path
+          python -m pytest -q -p no:cacheprovider --basetemp "$env:RUNNER_TEMP/maihush-tests" --junitxml "$env:RUNNER_TEMP/t0.xml"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.semantic_report --output "$env:RUNNER_TEMP/semantic.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/package.py --output "$env:RUNNER_TEMP/maihush.zip" --evidence "$env:RUNNER_TEMP/package.json"

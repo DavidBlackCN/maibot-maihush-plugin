@@ -36,7 +36,7 @@ async def run(work,layer):
     from src.plugin_runtime.hook_payloads import serialize_session_message
     from src.chat.message_receive.message import SessionMessage
     from src.common.data_models.mai_message_data_model import MessageInfo,UserInfo,GroupInfo
-    from src.common.data_models.message_component_data_model import MessageSequence,TextComponent,ImageComponent,EmojiComponent,VoiceComponent,ForwardNodeComponent,ForwardComponent
+    from src.common.data_models.message_component_data_model import MessageSequence,TextComponent,ImageComponent,EmojiComponent,VoiceComponent,ForwardNodeComponent,ForwardComponent,AtComponent
     manager=get_plugin_runtime_manager(); manager.ensure_builtin_hook_specs_registered()
     plugin_dirs=[work/'plugins']+([work/'neighbors'] if layer=='T2' else [])
     supervisor=PluginSupervisor(plugin_dirs=plugin_dirs,group_name='maihush-test',hook_spec_registry=manager._hook_spec_registry,max_restart_attempts=0,health_check_interval_sec=300,runner_spawn_timeout_sec=25)
@@ -70,6 +70,14 @@ async def run(work,layer):
         assert len(handlers)==1
         entry=handlers[0]; assert str(entry.mode).endswith('blocking') and str(entry.error_policy).endswith('abort')
         record('T1 native Runner IPC registration, configuration generation, strict API refusal')
+        at_payload=serialize_session_message(message('你是不是有点太吵了','10003',components=[AtComponent('123456789'),TextComponent('你是不是有点太吵了')]))
+        assert at_payload['raw_message'][0]['data']['target_user_id']=='123456789'
+        from maihush.host.messages import evidence
+        from maihush.host.config import MaiHushConfig
+        from maihush.decision.candidates import classify
+        at_candidate=classify(evidence(MaiHushConfig.model_validate(candidate_config),at_payload),'123456789')
+        assert at_candidate.safe and at_candidate.signal=='INDIRECT_RESTRAINT'
+        record('R02 actual Host AtComponent serialized shape feeds candidate adapter; no LLM decision claim')
         await command('/maihush mute 20m','10003')
         assert not (await manager.invoke_hook('send_service.before_send',message=serialize_session_message(message()))).aborted
         assert (await command('/maihush mute 20m'))[0]
@@ -103,6 +111,40 @@ async def run(work,layer):
         async def send(m=None): return await send_session_message_with_message(m or message(),typing=False,storage_message=False,show_log=False)
         assert await send() is not None and len(driver.calls)==1
         record('T2 native SendService / PlatformIO / counted final driver positive control')
+        # Actual registered Hush guard accepts proven unrelated routes before
+        # examining irrelevant malformed group data, but protects conflicts.
+        for change in ({'account_id':'222222222'},{'scope':'foreign'},{'platform':'discord'}):
+            unrelated=serialize_session_message(message(stream='unmanaged'))
+            unrelated.update(change); unrelated['message_info']['group_info']=['malformed']
+            assert not (await manager.invoke_hook('send_service.before_send',message=unrelated)).aborted
+        conflict=serialize_session_message(message()); conflict['account_id']='222222222'
+        assert (await manager.invoke_hook('send_service.before_send',message=conflict)).aborted
+        record('R02 native route triage: proven unrelated malformed payload passes; managed conflicting account aborts')
+        # Native OBSERVE after_send, actual sent=True from counted terminal;
+        # decision stays disabled. Observe persisted state without adding APIs.
+        auto_config=tomllib.loads(config_path.read_text(encoding='utf8'))
+        auto_config['autonomous']={'enabled':True,'min_successful_sends':4}
+        assert await supervisor.notify_plugin_config_updated(ID,auto_config,config_version='1')
+        # Honor the real cooldown installed by the earlier authorized unmute.
+        import sqlite3
+        with sqlite3.connect(work/'data/plugins'/ID/'maihush.sqlite3') as db:
+            pause_after=json.loads(db.execute('SELECT payload FROM stream_state WHERE stream=?',(STREAM,)).fetchone()[0])['pause_after']
+        await asyncio.sleep(max(0,pause_after-time.time())+.05)
+        for _ in range(4): assert await send() is not None
+        async def observed_state():
+            for _ in range(100):
+                with sqlite3.connect(work/'data/plugins'/ID/'maihush.sqlite3') as db:
+                    state=json.loads(db.execute('SELECT payload FROM stream_state WHERE stream=?',(STREAM,)).fetchone()[0])
+                if state['soft']=='RESTRAINED': return state
+                await asyncio.sleep(.02)
+            raise AssertionError('native successful-send statistics did not restrain')
+        auto_state=await observed_state()
+        assert auto_state['soft_origin']['source']=='autonomous' and not auto_state['soft_claims']
+        n=len(driver.calls); assert await send() is None and len(driver.calls)==n
+        assert (await command('/maihush unmute'))[0]
+        auto_config['autonomous']['enabled']=False
+        assert await supervisor.notify_plugin_config_updated(ID,auto_config,config_version='1')
+        record('R02 native config reload + confirmed successful SendService events autonomously restrain without any model call')
         before=len(driver.calls); assert (await command('/maihush mute 20m'))[0]; assert len(driver.calls)==before
         for components in ([TextComponent('x')],[TextComponent('')],[ImageComponent(binary_hash='synthetic')],[EmojiComponent(binary_hash='synthetic')],[VoiceComponent(binary_hash='synthetic')],[TextComponent(''),ImageComponent(binary_hash='synthetic')],[ForwardNodeComponent([ForwardComponent('synthetic','forward-test',[TextComponent('x')],user_id='10001')])]):
             assert await send(message(components=components)) is None

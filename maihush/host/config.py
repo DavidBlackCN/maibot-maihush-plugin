@@ -74,6 +74,16 @@ class Hard(Strict):
     default_seconds: int = Field(1200, ge=1, le=86400)
     max_seconds: int = Field(86400, ge=1, le=86400)
 
+class Autonomous(Strict):
+    enabled: bool = False
+    window_seconds: int = Field(120, ge=30, le=300)
+    min_successful_sends: int = Field(8, ge=4, le=32)
+    max_gap_seconds: int = Field(20, ge=1, le=60)
+    min_bot_share_percent: int = Field(70, ge=50, le=100)
+    duration_seconds: int = Field(60, ge=10, le=120)
+    cooldown_seconds: int = Field(600, ge=300, le=3600)
+    hour_budget_seconds: int = Field(180, ge=10, le=300)
+
 class Decision(Strict):
     enabled: bool = False
     task_name: str = ''
@@ -115,6 +125,7 @@ class MaiHushConfig(Strict):
     soft: Soft = Field(default_factory=Soft)
     restraint: Restraint = Field(default_factory=Restraint)
     recovery: Recovery = Field(default_factory=Recovery)
+    autonomous: Autonomous = Field(default_factory=Autonomous)
     hard: Hard = Field(default_factory=Hard)
     decision: Decision = Field(default_factory=Decision)
     storage: Storage = Field(default_factory=Storage)
@@ -131,7 +142,8 @@ class MaiHushConfig(Strict):
             raise ValueError('requester caps inconsistent')
         if self.hard.default_seconds > self.hard.max_seconds: raise ValueError('hard caps inconsistent')
         if d.candidate_ttl_seconds <= d.timeout_seconds or (d.enabled and not d.task_name.strip()): raise ValueError('explicit task and bounded TTL required')
-        if d.model_name: raise ValueError('v0.1 selects an existing task only; concrete model override unsupported')
+        if d.model_name: raise ValueError('select an existing task; concrete model override unsupported')
+        if self.autonomous.duration_seconds>min(self.autonomous.hour_budget_seconds,self.restraint.max_seconds): raise ValueError('autonomous caps inconsistent')
         streams=[r.stream_id for r in self.routes]
         keys=[(r.platform,r.bot_account_id,r.route_scope,r.group_id) for r in self.routes]
         if len(set(streams)) != len(streams) or len(set(keys)) != len(keys): raise ValueError('duplicate route')

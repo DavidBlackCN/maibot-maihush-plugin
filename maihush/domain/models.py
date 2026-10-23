@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 class Denied(Exception):
@@ -18,6 +18,10 @@ class State:
     resume_after: float = 0
     candidate_after: float = 0
     last_allowed: float = 0
+    # Additive JSON fields keep schema-1 / R0.1 rows readable. No chat text.
+    soft_origin: dict = field(default_factory=dict)
+    soft_claims: list = field(default_factory=list)
+    auto_after: float = 0
 
     def expire(self, now, recovery):
         before=vars(self).copy()
@@ -25,8 +29,12 @@ class State:
             self.hard='NONE'; self.soft='RECOVERING'; self.soft_until=self.hard_until+recovery
         if self.hard == 'NONE' and self.soft in ('SOFT_SILENT','RESTRAINED') and now >= self.soft_until:
             self.soft='RECOVERING'; self.soft_until+=recovery
+            self.soft_claims=[]
         if self.soft == 'RECOVERING' and now >= self.soft_until:
-            self.soft='NORMAL'; self.soft_until=0; self.episode_start=0; self.episode_deadline=0
+            self.soft='NORMAL'; self.soft_until=0
+            self.soft_origin={}; self.soft_claims=[]
+        if self.episode_deadline and now>=self.episode_deadline:
+            self.episode_start=0; self.episode_deadline=0
         if before != vars(self): self.version+=1
         return self
 

@@ -6,7 +6,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-02",
@@ -15,7 +17,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-03",
@@ -24,7 +28,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-04",
@@ -33,7 +39,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "direct-05",
@@ -42,7 +51,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-06",
@@ -51,7 +62,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-07",
@@ -60,7 +73,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-08",
@@ -69,7 +84,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "direct-09",
@@ -78,7 +95,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "direct-10",
@@ -87,7 +107,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-01",
@@ -96,7 +118,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-02",
@@ -105,7 +129,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "admin_soft-03",
@@ -114,7 +141,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-04",
@@ -123,7 +152,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "admin_soft-05",
@@ -132,7 +164,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-06",
@@ -141,7 +175,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-07",
@@ -150,7 +186,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-08",
@@ -159,7 +197,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-09",
@@ -168,7 +208,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "admin_soft-10",
@@ -177,7 +219,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "admin"
+    "actor_role": "admin",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "resume-01",
@@ -186,7 +230,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-02",
@@ -195,7 +241,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-03",
@@ -204,7 +252,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-04",
@@ -213,7 +263,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-05",
@@ -222,7 +274,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-06",
@@ -231,7 +285,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-07",
@@ -240,7 +296,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-08",
@@ -249,7 +307,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "resume-09",
@@ -258,7 +318,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "resume-10",
@@ -267,7 +330,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "recover_candidate",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "EXPLICIT_REINVITE",
+    "eligible": true
   },
   {
     "id": "quoted-01",
@@ -276,7 +341,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-02",
@@ -285,7 +353,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-03",
@@ -294,7 +365,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-04",
@@ -303,7 +377,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-05",
@@ -312,7 +389,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-06",
@@ -321,7 +401,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-07",
@@ -330,7 +413,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-08",
@@ -339,7 +425,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-09",
@@ -348,7 +437,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "quoted-10",
@@ -357,7 +449,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "quoted_or_reported"
   },
   {
     "id": "negated-01",
@@ -366,7 +461,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-02",
@@ -375,7 +473,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-03",
@@ -384,7 +485,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-04",
@@ -393,7 +497,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-05",
@@ -402,7 +509,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-06",
@@ -411,7 +521,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-07",
@@ -420,7 +533,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-08",
@@ -429,7 +545,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-09",
@@ -438,7 +557,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "negated-10",
@@ -447,7 +569,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "negated"
   },
   {
     "id": "other-01",
@@ -456,7 +581,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-02",
@@ -465,7 +593,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-03",
@@ -474,7 +605,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-04",
@@ -483,7 +617,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-05",
@@ -492,7 +629,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-06",
@@ -501,7 +641,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-07",
@@ -510,7 +653,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-08",
@@ -519,7 +665,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-09",
@@ -528,7 +677,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "other-10",
@@ -537,7 +689,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "keep",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "other_target"
   },
   {
     "id": "impersonation-01",
@@ -546,7 +701,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-02",
@@ -555,7 +713,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-03",
@@ -564,7 +725,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-04",
@@ -573,7 +737,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-05",
@@ -582,7 +749,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-06",
@@ -591,7 +761,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-07",
@@ -600,7 +773,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-08",
@@ -609,7 +785,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-09",
@@ -618,7 +797,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "impersonation-10",
@@ -627,7 +809,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "identity_claim"
   },
   {
     "id": "long_or_ambiguous-01",
@@ -636,7 +821,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "long_or_ambiguous-02",
@@ -645,7 +832,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "long_or_ambiguous-03",
@@ -654,7 +843,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "long_or_ambiguous-04",
@@ -663,7 +854,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "long_or_ambiguous-05",
@@ -672,7 +865,9 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": true
   },
   {
     "id": "long_or_ambiguous-06",
@@ -681,7 +876,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "long_or_ambiguous-07",
@@ -690,7 +888,10 @@
     "split": "development",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "long_or_ambiguous-08",
@@ -699,7 +900,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "long_or_ambiguous-09",
@@ -708,7 +912,10 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   },
   {
     "id": "long_or_ambiguous-10",
@@ -717,6 +924,9 @@
     "split": "holdout",
     "hard_authorized": false,
     "expected": "soft_review_only",
-    "actor_role": "member"
+    "actor_role": "member",
+    "signal": "DIRECT_PAUSE",
+    "eligible": false,
+    "negative_reason": "ambiguous_target"
   }
 ]

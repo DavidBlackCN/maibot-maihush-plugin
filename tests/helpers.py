@@ -25,6 +25,10 @@ def verdict(action='soft_silence',seconds=60,mid='msg-1'):
     return Verdict(schema_version=1,intent={'keep':'none','soft_silence':'pause','restrain':'reduce','recover':'resume'}[action],target='bot',decision=action,duration_seconds=seconds,reason_code='REINVITED' if action=='recover' else 'RESPECT_REQUEST',evidence_message_ids=[mid])
 
 def apply(service,e,seconds=60,action='soft_silence'):
+    if action=='recover':
+        # A recovery fixture must carry a genuine invitation, not a pause text
+        # paired with a fabricated model intent.
+        e=evidence(service.config,message(text='麦麦你可以回来一起讨论了',actor=e.actor,mid=e.mid,stream=e.stream,group=service.config.route(e.stream).group_id))
     s=service.state(e.stream)
     t={'version':s.version,'revision':service.revision,'at':service.now()}
     return service.decide(e,t,verdict(action,seconds,e.mid))

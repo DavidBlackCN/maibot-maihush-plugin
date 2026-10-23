@@ -21,14 +21,25 @@ def route_for(config, message, *, outbound=False):
     if not config.enabled: return None
     platform=message.get('platform')
     stream=message.get('session_id')
-    route=config.route(stream)
+    route=config.route(stream) if isinstance(stream,str) else None
     if not route and isinstance(platform,str) and platform != 'qq': return None
+    # Positive exclusion precedes parsing fields irrelevant to this account.
+    candidates=[r for r in config.routes if config.enabled and r.enabled]
+    if not candidates: return None
+    if not route:
+        for key,attr in [('account_id','bot_account_id'),('scope','route_scope')]:
+            value=message.get(key)
+            if isinstance(value,str) and value and all(value!=getattr(r,attr) for r in candidates): return None
+    for key in ('platform','account_id','scope','session_id'):
+        value=message.get(key)
+        if value is not None and not isinstance(value,str): raise Denied('MALFORMED_ROUTE')
     info=message.get('message_info')
     group=info.get('group_info') if isinstance(info,dict) else None
     if group is not None and not isinstance(group,dict): raise Denied('MALFORMED_ROUTE')
+    if isinstance(group,dict) and not isinstance(group.get('group_id'),str): raise Denied('MALFORMED_ROUTE')
     if not route:
         # Missing session on a managed account/scope cannot prove exclusion.
-        candidates=[r for r in config.routes if r.enabled and message.get('account_id') in (None,'',r.bot_account_id) and message.get('scope') in (None,'',r.route_scope)]
+        candidates=[r for r in candidates if message.get('account_id') in (None,'',r.bot_account_id) and message.get('scope') in (None,'',r.route_scope)]
         if candidates and (not group or any(r.group_id==group.get('group_id') for r in candidates)):
             if group is None and isinstance(info,dict) and 'group_info' in info: return None
             raise Denied('MALFORMED_ROUTE')

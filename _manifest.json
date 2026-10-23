@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "id": "davidblackcn.maibot-maihush-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "MaiHush",
   "description": "Bounded social quiet and deterministic local group silence.",
   "author": {

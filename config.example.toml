@@ -47,6 +47,17 @@ invitation_cooldown_seconds = 60
 default_seconds = 1200
 max_seconds = 86400
 
+# Independent from decision.enabled; only confirmed sends can trigger RESTRAINED.
+[autonomous]
+enabled = false
+window_seconds = 120
+min_successful_sends = 8
+max_gap_seconds = 20
+min_bot_share_percent = 70
+duration_seconds = 60
+cooldown_seconds = 600
+hour_budget_seconds = 180
+
 [decision]
 enabled = false
 task_name = ""
