@@ -21,8 +21,11 @@ def serialized(fn):
         if fn.__name__=='before_send' and self.active is not None:
             message=kwargs.get('message',args[0] if args else None)
             try:
-                if route_for(self.active,message,outbound=True) is None: return {'action':'continue'}
-            except Denied as exc: return {'action':'abort','reason':str(exc)}
+                # Exclusion must hold for both sides of an in-progress switch.
+                # Potentially affected sends wait, then reclassify on publication.
+                configs=(self.active,self.transition_config)
+                if all(route_for(c,message,outbound=True) is None for c in configs if c is not None): return {'action':'continue'}
+            except Denied: pass
         async with self.control_gate:
             return await fn(self,*args,**kwargs)
     return guarded
@@ -36,6 +39,7 @@ class MaiHushPlugin(MaiBotPlugin):
         self.ready=False; self.futures=set(); self.maintenance=None
         self.history=defaultdict(lambda:deque(maxlen=20)); self.sent=defaultdict(lambda:deque(maxlen=256)); self.error_after={}
         self.control_gate=asyncio.Lock(); self.quiescing=False
+        self.transition_config=None
         self.config_tasks=set()
         self.seen=defaultdict(dict); self.inbound=defaultdict(lambda:deque(maxlen=256)); self.inbound_seen=defaultdict(dict)
 
@@ -114,6 +118,7 @@ class MaiHushPlugin(MaiBotPlugin):
         async with self.control_gate:
             if not self.ready: return
             self.quiescing=True
+            self.transition_config=new
             try:
                 # Cancel/join old decisions before changing the store config.
                 # No guarded Hook can observe active/store from different epochs.
@@ -124,7 +129,7 @@ class MaiHushPlugin(MaiBotPlugin):
             except Exception as exc:
                 self.ctx.logger.error('MaiHush config rejected; old active configuration retained: %s',type(exc).__name__)
             finally:
-                self.worker=Worker(self); self.worker.start(); self.quiescing=False
+                self.worker=Worker(self); self.worker.start(); self.quiescing=False; self.transition_config=None
 
     def participation(self,stream):
         now=time.monotonic(); sent=self.sent.get(stream,())

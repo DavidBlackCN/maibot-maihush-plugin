@@ -89,7 +89,44 @@ async def run(work,layer):
         assert response.payload['result'][0] is False
         assert (await manager.invoke_hook('send_service.before_send',message=serialize_session_message(message()))).aborted
         record('A04 mismatching native envelope rejected')
+        # Real concurrent RPCs, with no test barrier or replacement inside the
+        # Runner. Deterministic commit-window interleavings are covered in T0.
+        import sqlite3
+        def stored_state():
+            with sqlite3.connect(work/'data/plugins'/ID/'maihush.sqlite3') as db:
+                state=json.loads(db.execute('SELECT payload FROM stream_state WHERE stream=?',(STREAM,)).fetchone()[0])
+                revision=json.loads(db.execute("SELECT value FROM metadata WHERE key='config_revision'").fetchone()[0])
+            return state,revision
+        before_state,_=stored_state()
+        hot_config=tomllib.loads(config_path.read_text(encoding='utf8'))
+        async def protected_send_probe():
+            return await manager.invoke_hook('send_service.before_send',message=serialize_session_message(message()))
+        async def unrelated_probe():
+            raw=serialize_session_message(message(stream='unmanaged-config-probe',group='222222222'))
+            raw['scope']='other-scope'; raw['message_info']['group_info']=['irrelevant']
+            return await manager.invoke_hook('send_service.before_send',message=raw)
+        outcomes=await asyncio.gather(supervisor.notify_plugin_config_updated(ID,hot_config,config_version='1'),
+                                      *(protected_send_probe() for _ in range(20)),*(unrelated_probe() for _ in range(10)))
+        assert outcomes[0] is True and all(x.aborted for x in outcomes[1:21]) and all(not x.aborted for x in outcomes[21:])
+        assert stored_state()[0]['hard_until']==before_state['hard_until']
+        record('C01 native concurrent config RPC + 20 hard-blocked and 10 unrelated allowed Hook invocations')
+        _,revision=stored_state()
+        rejected=json.loads(json.dumps(hot_config)); rejected['instance_id']='offline-change-denied'
+        assert await supervisor.notify_plugin_config_updated(ID,rejected,config_version='1')
+        assert stored_state()[1]==revision and (await protected_send_probe()).aborted
+        assert stored_state()[0]['hard_until']==before_state['hard_until']
+        assert await supervisor.reload_plugins([ID],reason='closeout-hard-state-reload')
+        assert (await protected_send_probe()).aborted and stored_state()[0]['hard_until']==before_state['hard_until']
+        record('C02 native business-rejected hot update retains old config/state; reload preserves exact hard deadline')
         assert (await command('/maihush unmute'))[0]
+        for field in ('route','global'):
+            for enabled in (False,True):
+                altered=json.loads(json.dumps(hot_config))
+                if field=='route': altered['routes'][0]['enabled']=enabled
+                else: altered['enabled']=enabled
+                assert await supervisor.notify_plugin_config_updated(ID,altered,config_version='1')
+                assert not (await protected_send_probe()).aborted
+        record('C03 native route/global disable-enable round trips after authorized unmute; no stale guard or lost target')
         if layer=='T1':
             assert await supervisor.reload_plugins([ID],reason='test-reload')
             assert (await call('get_contract'))['ok']; record('T1 unload/reload lifecycle and writer lease')
