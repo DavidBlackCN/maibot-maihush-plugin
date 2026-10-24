@@ -2,7 +2,7 @@
 
 MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)。正式名称、Python 包及目录为 `maihush`，许可证 MIT。
 
-实际验收版本为 **Host 1.3.12 / maibot-plugin-sdk 2.15.0**。manifest 声明的范围为 Host 1.3.12–1.99.99、SDK 2.15.0–2.99.99；运行时仍只接受上述固定验收版本，其他版本未验证。
+本次修复候选的隔离联调基线为 **Host 1.3.12 / maibot-plugin-sdk 2.15.0**。manifest 最小/最大版本与运行检查均收紧到上述精确版本；Host 1.3.14 / SDK 2.16.0 尚待独立升级验收。
 
 解压安装包到独立插件目录。首次加载默认没有受管理群、没有管理员、没有模型调用。根据 `config.example.toml` 配置 QQ 机器人账号、实际 scope、已有真实 stream_id 和当前群 ID；账号均为字符串。示例全为合成值，不能直接部署。新增路由需要重启；已有路由身份不可在线改绑。`[plugin].config_version = "1"` 是固定 Runner 必需的传输配置，根级 `config_version = 1` 是业务版本。根级 `enabled=false` 会明确清除本插件约束；Host 的插件卸载/禁用会移除守卫，重新启用仍读取持久化期限。
 
@@ -32,7 +32,7 @@ MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.c
 
 软态为 NORMAL / RESTRAINED / SOFT_SILENT / RECOVERING；硬态独立为 NONE / HARD_SILENT。普通软静默单次最多 300 秒，管理员自然语言最多 600 秒；episode 最多 600 秒，群滚动小时并集最多 900 秒，请求者分别最多 300/600 秒。事务仅预留增量，提前恢复仅释放未发生区间；请求、额度、调用预算、冷却和期限重启保留。克制与恢复间隔默认 30/60 秒，分段可能仅第一段获准。模型超时、错误 JSON、未知字段、过期或版本失配均不新增静默。
 
-正常 SendService 路径的文本、媒体、分段和其他插件主动消息都受 BLOCKING/ABORT 守卫约束，没有文本、空串、tag 或 receipt 豁免。after_send 仅观察成功统计并可提交自主克制，不退款或解锁。明确其他账号、scope、平台的无关路由先排除；管理 session 冲突或不能判定的结构仍拒绝。H01/H02/H03 只允许 false。没有公共硬写 API 或 silence Tool；get_contract@1 仅描述，get_state@1 一律 UNTRUSTED_CONTEXT。解除 MaiHush 不唤醒 MaiVita、不改频率。
+正常 SendService 路径的文本、媒体、分段和其他插件主动消息都受 BLOCKING/ABORT 守卫约束，没有文本、空串、tag 或 receipt 豁免。after_send 仅观察成功统计并可提交自主克制，不退款或解锁。明确其他账号、scope、平台的无关路由先排除；管理 session 冲突或不能判定的结构仍拒绝。H01/H02/H03 只允许 false。没有公共硬写 API 或 silence Tool；get_contract@1 仅描述，get_state@1 一律 UNTRUSTED_CONTEXT。新增 get_public_constraints@1 接受精确 stream_id，返回最小公开约束摘要、路由绑定摘要、版本、健康状态和最多五秒时效；读取不调用 guard、不落库、不扣额度、不预约节流。不返回管理员、请求者、原始文本或硬静默完整期限。解除 MaiHush 不唤醒 MaiVita、不改频率。
 
 已知 Host 边界：注册且被调用的 Hook 异常/超时可 ABORT；熔断、Runner 缺席/崩溃、卸载、禁用、关闭和无目标可能跳过守卫。已通过守卫的在途发送不可撤回，后续 Hook 改路由及直接 Platform IO/网关发送不在保证内。处理器级 ABORT 的意外异常也可能影响无关路由。插件不是平台禁言或进程故障时的全局封锁。
 

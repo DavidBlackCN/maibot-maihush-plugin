@@ -236,3 +236,14 @@ class MaiHushPlugin(MaiBotPlugin):
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):
         return {'api_version':1,'ok':False,'data':None,'error':{'code':'UNTRUSTED_CONTEXT','retryable':False}}
+
+    @API('get_public_constraints',version='1',public=True)
+    @serialized
+    async def get_public_constraints(self,stream_id=None,**kwargs):
+        try:
+            if not self.ready or self.quiescing: raise Denied('NOT_READY')
+            if type(stream_id) is not str or not 1 <= len(stream_id) <= 256: raise Denied('INVALID_ROUTE')
+            data=await self.io(self.service.public_summary,stream_id)
+            return {'api_version':1,'ok':True,'data':data,'error':None}
+        except Denied as exc:
+            return {'api_version':1,'ok':False,'data':None,'error':{'code':str(exc),'retryable':False}}

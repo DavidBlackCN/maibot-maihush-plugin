@@ -107,6 +107,26 @@ class Service:
         if self.health!='READY': return replace(self.snapshots.get(stream,State())).expire(self.now(),self.config.recovery.duration_seconds)
         return self._run(stream,lambda s,n:replace(s))
 
+    def public_summary(self, stream):
+        """Read a copy only: no guard, transaction, clock update or reservation."""
+        route = self.config.route(stream)
+        if route is None or stream not in self.snapshots:
+            raise Denied('ROUTE_UNAVAILABLE')
+        wall = self.wall()
+        now = max(wall, self.logical + max(0, self.mono()-self.last_mono))
+        health = self.health
+        if wall < max(self.last_wall, self.logical)-5:
+            health = 'DEGRADED'
+        state = replace(self.snapshots[stream]).expire(now, self.config.recovery.duration_seconds)
+        deadlines = [now+5]
+        if state.hard == 'HARD_SILENT': deadlines.append(state.hard_until)
+        if state.soft != 'NORMAL': deadlines.append(state.soft_until)
+        return {'stream_id':stream, 'route_fingerprint':sha256(json.dumps(route.identity(),separators=(',',':')).encode()).hexdigest(),
+                'state_version':state.version, 'config_revision':self.revision,
+                'hard':state.hard, 'soft':state.soft, 'health':health,
+                'as_of':now, 'valid_until':min(t for t in deadlines if t>now),
+                'send_permit':False, 'guard_scope':'send_service_while_registered'}
+
     def _request(self,e,op,state,now,fn):
         self._evidence(e,now)
         row=self.db.conn.execute('SELECT fingerprint,result FROM requests WHERE stream=? AND mid=? AND operation=?',(e.stream,e.mid,op)).fetchone()
