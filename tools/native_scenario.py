@@ -274,6 +274,12 @@ async def run(work,layer):
         dispatch=await manager.invoke_hook('send_service.before_send',message=serialize_session_message(message()))
         assert dispatch.aborted and 'maivita' in dispatch.stopped_by
         record('I01/I03 actual MaiVita sleep veto survives Hush unmute; actual MaiIdentity forgery refusal over API IPC')
+        n=len(driver.calls)
+        concurrent=await asyncio.gather(*(send() for _ in range(20)))
+        assert all(value is None for value in concurrent) and len(driver.calls)==n
+        assert (await call('get_life_state',plugin=vita_id))['data']['sleep_phase']=='sleeping'
+        assert (await call('get_public_constraints',{'stream_id':STREAM}))['data']['hard']=='NONE'
+        record('I05 three real cores: 20 concurrent sends remain blocked by sleep with Hush unmuted; public reads do not wake')
         assert (await supervisor.unload_plugins([vita_id],reason='offline-observed-wake-fixture')).success
         vita_state=vita_engine.state()
         vita_engine.execute(VitaCommand(idempotency_key='synthetic-observed-wake',kind='wake',source='legacy_observed',expected_state_version=vita_state.state_version,payload={}))
@@ -283,6 +289,25 @@ async def run(work,layer):
         dispatch=await manager.invoke_hook('send_service.before_send',message=serialize_session_message(message()))
         assert dispatch.aborted and 'maihush' in dispatch.stopped_by
         record('I02 actual MaiVita awake does not clear Hush hard veto; local synthetic observed-life fixtures, no models')
+        hard_before=stored_state()[0]['hard_until']
+        active=tomllib.loads(config_path.read_text(encoding='utf8'))
+        n=len(driver.calls)
+        outcomes=await asyncio.gather(supervisor.notify_plugin_config_updated(ID,active,config_version='1'),
+                                      *(send() for _ in range(20)))
+        assert outcomes[0] is True and all(value is None for value in outcomes[1:]) and len(driver.calls)==n
+        assert await supervisor.reload_plugins([ID,vita_id,identity_id],reason='joint-closeout-reload')
+        assert stored_state()[0]['hard_until']==hard_before and await send() is None
+        assert (await call('get_life_state',plugin=vita_id))['data']['sleep_phase']=='awake'
+        assert (await call('get_state',{'owner':True}))['error']['code']=='UNTRUSTED_CONTEXT'
+        record('I06 three real cores: hot configuration with 20 concurrent sends and reload preserves hard deadline independently of awake life')
+        assert (await command('/maihush unmute'))[0]
+        assert await send() is not None
+        for mode in ('error','timeout'):
+            await call('test_mode',{'mode':mode},CONSUMER)
+            n=len(driver.calls)
+            assert await send() is None and len(driver.calls)==n
+        await call('test_mode',{'mode':'normal'},CONSUMER)
+        record('I07 three real cores: awake/unmuted positive control; synthetic registered Hook exception and timeout ABORT before driver')
         assert (await supervisor.unload_plugins([vita_id,identity_id],reason='end-joint-matrix')).success
         # Offline, explicit state fixtures exercise guard modes without a paid
         # model or a public soft-state write API. Domain transitions are T0.

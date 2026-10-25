@@ -21,3 +21,13 @@ jobs:
           python -m tools.semantic_report --output "$env:RUNNER_TEMP/semantic.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/package.py --output "$env:RUNNER_TEMP/maihush.zip" --evidence "$env:RUNNER_TEMP/package.json"
+      - name: Preserve current CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maihush-checks-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/t0.xml
+            ${{ runner.temp }}/semantic.json
+            ${{ runner.temp }}/package.json
+            ${{ runner.temp }}/maihush.zip

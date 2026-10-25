@@ -42,4 +42,6 @@ MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.c
 
 R0.2 最小收口保持版本 0.2.0，以提交 SHA 区分原始构建与收口构建。冻结定位为 **Stage 01 · Integration Ready Candidate（单体基础门禁）**；门禁包括完整 T0、固定 Host/SDK 原生 T1/T2、实际安装包及确定性复建。配置提交/发布的精确屏障测试属于 T0；原生并发配置 RPC、业务拒绝保留旧状态和硬截止重载另行验证。此定位不代表 H01/H02/H03 联动或生产验收完成。
 
+2026-10-25 联合收口：修正打包器仍要求旧宽版本上限的问题，增加旧上限拒绝回归；完整 T0、120 条确定性规则、原生 T1/T2 与包复建重新执行。三核心插件同时加载时补测 20 路并发发送、配置热更新、重载保持硬期限、睡眠与硬静默的独立否决、公共读取与特权拒绝，以及合成注册 Hook 异常/超时的 ABORT。测试工具和源码指纹随新证据记录；这些结果不是实际 QQ 送达或真实模型效果验收，已知宿主 fail-open 边界保持原样。
+
 接口依据为 [官方插件文档](https://docs.mai-mai.org/plugin/)、固定 [MaiBot 提交](https://github.com/Mai-with-u/MaiBot/tree/5c7637e6913c84d1c3d5e742fa9e95a7e70d3501) 与 [SDK 2.15.0](https://pypi.org/project/maibot-plugin-sdk/2.15.0/)。只读核对 MaiVita / MaiIdentity 契约，未复制其实现或旧 GroupMuter 代码，Host/SDK 不随包分发。

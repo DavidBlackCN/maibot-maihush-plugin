@@ -98,6 +98,12 @@ def main():
               'host_files_verified':len(lock['host_files']),'sdk_files_verified':len(lock['sdk_files']),
               'runtime_fingerprint':fingerprint,'config_sha256':digest(work/'plugins/candidate/config.toml')}
     metadata['package_sha256']=digest(args.package) if args.package else None
+    metadata['verification_files']={p.relative_to(ROOT).as_posix():digest(p)
+        for directory in ('tools','tests') for p in (ROOT/directory).rglob('*.py')}
+    if (work/'neighbor-source-hashes.json').exists():
+        neighbors=json.loads((work/'neighbor-source-hashes.json').read_text(encoding='utf8'))
+        assert neighbors=={name:digest(ROOT.parent/name) for name in neighbors}
+        metadata['neighbor_source_unchanged']=True
     (work/'run.json').write_text(json.dumps(metadata,indent=2),encoding='utf8')
     if process.returncode:
         print(output.decode('utf8',errors='replace')[-4500:])
