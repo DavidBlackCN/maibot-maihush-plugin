@@ -31,11 +31,15 @@ def test_changed_scope_waits_for_config_publication(tmp_path,field,enable,phase)
             await asyncio.wait_for(entered.wait(),1)
             guards=[asyncio.create_task(p.before_send(message=message(mid=str(i)))) for i in range(20)]
             await asyncio.sleep(.02)
-            assert not any(g.done() for g in guards),'changed scope bypassed pending configuration'
+            assert all(not g.done() or g.result()=={'action':'abort','reason':'MAIHUSH_BUSY'} for g in guards),'changed scope bypassed pending configuration'
             unrelated=message(stream='other',group='222222222'); unrelated['scope']='foreign'
             assert (await asyncio.wait_for(p.before_send(message=unrelated),.1))['action']=='continue'
             release.set(); await update
-            assert all(r['action']=='continue' for r in await asyncio.gather(*guards))
+            results=await asyncio.gather(*guards)
+            assert all(r['action']=='continue' or r=={'action':'abort','reason':'MAIHUSH_BUSY'} for r in results)
+            # Overload may veto during publication/queueing, but it must not
+            # leave the newly published normal route permanently blocked.
+            assert (await p.before_send(message=message(mid='after-publication')))['action']=='continue'
             assert p.active==p.service.config and not p.config_tasks and not model.active
         finally:
             release.set()
