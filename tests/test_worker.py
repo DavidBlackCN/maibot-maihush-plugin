@@ -38,7 +38,7 @@ async def start(directory, cfg):
     model=Model(); p=MaiHushPlugin()
     p.set_plugin_config(cfg.model_dump())
     p._set_context(SimpleNamespace(paths=SimpleNamespace(data_dir=directory),llm=model,logger=logging.getLogger('test')))
-    previous=os.environ.get('MAIBOT_HOST_VERSION'); os.environ['MAIBOT_HOST_VERSION']='1.3.12'
+    previous=os.environ.get('MAIBOT_HOST_VERSION'); os.environ['MAIBOT_HOST_VERSION']=previous or '1.3.12'
     try: await p.on_load()
     finally:
         if previous is None: os.environ.pop('MAIBOT_HOST_VERSION',None)

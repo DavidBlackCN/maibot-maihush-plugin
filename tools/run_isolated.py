@@ -11,8 +11,10 @@ import importlib.metadata
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import zipfile
 import tomli_w
 
@@ -22,12 +24,14 @@ ID='davidblackcn.maibot-maihush-plugin'
 
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 
-def verify(host):
-    lock=json.loads((ROOT/'tests/fixtures/source-lock.json').read_text())
+def verify(host,source_lock):
+    lock=json.loads(source_lock.read_text(encoding='utf8'))
+    import tomllib
+    assert tomllib.loads((host/'pyproject.toml').read_text(encoding='utf8'))['project']['version']==lock['host_version']
     for rel,expected in lock['host_files'].items(): assert digest(host/rel)==expected,rel
     import maibot_sdk
     site=Path(maibot_sdk.__file__).parent.parent
-    assert importlib.metadata.version('maibot-plugin-sdk')=='2.15.0'
+    assert importlib.metadata.version('maibot-plugin-sdk')==lock['sdk_version']
     for rel,expected in lock['sdk_files'].items(): assert digest(site/rel)==expected,rel
     return lock
 
@@ -71,30 +75,38 @@ def stage(work,neighbors=False,package=None):
     return candidate
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--evidence-dir',type=Path,required=True); ap.add_argument('--host-source',type=Path,required=True); ap.add_argument('--layer',choices=['T1','T2'],required=True); ap.add_argument('--package',type=Path); args=ap.parse_args()
-    host=args.host_source.resolve(); lock=verify(host)
+    ap=argparse.ArgumentParser(); ap.add_argument('--evidence-dir',type=Path,required=True); ap.add_argument('--host-source',type=Path,required=True); ap.add_argument('--layer',choices=['T1','T2'],required=True); ap.add_argument('--package',type=Path); ap.add_argument('--source-lock',type=Path,default=ROOT/'tests/fixtures/source-lock.json'); args=ap.parse_args()
+    host=args.host_source.resolve(); lock=verify(host,args.source_lock)
     work=args.evidence_dir.resolve()/args.layer
     if work.exists(): raise SystemExit('Choose a new evidence directory; existing evidence is preserved')
     work.mkdir(parents=True); stage(work,neighbors=args.layer=='T2',package=args.package); shutil.copyfile(host/'pyproject.toml',work/'pyproject.toml')
     safety=work/'safety'; safety.mkdir()
-    (safety/'sitecustomize.py').write_text("import sys\ndef audit(event,args):\n    if event=='socket.connect':\n        a=args[1]\n        if not isinstance(a,tuple) or a[0] not in ('127.0.0.1','::1'): raise PermissionError('MAIHUSH_TEST_EXTERNAL_NETWORK_DENIED')\nsys.addaudithook(audit)\n",encoding='utf8')
+    (safety/'sitecustomize.py').write_text("import os,sys\ndef audit(event,args):\n    if event=='socket.connect':\n        a=args[1]\n        if isinstance(a,str) and a==os.environ.get('MAIHUSH_TEST_SOCKET_PATH'): return\n        if not isinstance(a,tuple) or a[0] not in ('127.0.0.1','::1'): raise PermissionError('MAIHUSH_TEST_EXTERNAL_NETWORK_DENIED')\nsys.addaudithook(audit)\n",encoding='utf8')
     env={k:v for k,v in os.environ.items() if k.upper() in ('SYSTEMROOT','WINDIR','COMSPEC','PATHEXT','NUMBER_OF_PROCESSORS')}
-    env.update(PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1',PYTHONUNBUFFERED='1',PYTHONPATH=os.pathsep.join((str(safety),str(ROOT),str(host))),MAIBOT_INSTANCE_DIR=str(work),TEMP=str(work),TMP=str(work),USERPROFILE=str(work),MAIHUSH_TEST_LAYER=args.layer)
+    env.update(PYTHONUTF8='1',PYTHONDONTWRITEBYTECODE='1',PYTHONUNBUFFERED='1',PYTHONPATH=os.pathsep.join((str(safety),str(ROOT),str(host))),MAIBOT_INSTANCE_DIR=str(work),TEMP=str(work),TMP=str(work),USERPROFILE=str(work),MAIHUSH_TEST_LAYER=args.layer,MAIBOT_HOST_VERSION=lock["host_version"])
+    socket_dir=tempfile.TemporaryDirectory(prefix='mh-test-') if os.name!='nt' else None
+    if socket_dir: env['MAIHUSH_TEST_SOCKET_PATH']=str(Path(socket_dir.name)/'rpc.sock')
     started=datetime.now(timezone.utc).isoformat()
     runtime_files=[ROOT/'plugin.py',ROOT/'_manifest.json',*(ROOT/'maihush').rglob('*.py')]
     fingerprint={p.relative_to(ROOT).as_posix():digest(p) for p in runtime_files}
-    process=subprocess.Popen([sys.executable,'-m','tools.native_scenario'],cwd=work,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    process=subprocess.Popen([sys.executable,'-m','tools.native_scenario'],cwd=work,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,start_new_session=os.name!='nt')
     try: output,_=process.communicate(timeout=150)
     except BaseException:
         if process.poll() is None:
-            subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True); process.wait()
+            if os.name=='nt':
+                subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True)
+            else:
+                os.killpg(process.pid,signal.SIGKILL)
+            process.wait()
         raise
+    finally:
+        if socket_dir: socket_dir.cleanup()
     (work/'console.log').write_bytes(output)
-    verify(host)
+    verify(host,args.source_lock)
     assert fingerprint=={p.relative_to(ROOT).as_posix():digest(p) for p in runtime_files}
     metadata={'started_at':started,'finished_at':datetime.now(timezone.utc).isoformat(),
               'command':[sys.executable,*sys.argv],'exit_code':process.returncode,
-              'python':sys.version,'source_lock_sha256':digest(ROOT/'tests/fixtures/source-lock.json'),
+              'python':sys.version,'host_version':lock['host_version'],'sdk_version':lock['sdk_version'],'source_lock_sha256':digest(args.source_lock),
               'host_files_verified':len(lock['host_files']),'sdk_files_verified':len(lock['sdk_files']),
               'runtime_fingerprint':fingerprint,'config_sha256':digest(work/'plugins/candidate/config.toml')}
     metadata['package_sha256']=digest(args.package) if args.package else None

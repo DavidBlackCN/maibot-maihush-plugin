@@ -1,8 +1,10 @@
+> 2026-10-26 兼容性修订：运行时仅接受 `Host 1.3.12 / SDK 2.15.0` 与 `Host 1.3.15 / SDK 2.16.0` 两个明确配对；Manifest 的上下限不表示支持中间版本或混搭。部署时使用 Bot 自己的虚拟环境，不要用系统 Python，也不要单独降级 SDK。新版验收证据与旧版分开记录；真实 QQ、生产部署以及 H01/H02/H03 均未因此获得验收或授权。
+
 # MaiHush 0.2.0
 
 MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)。正式名称、Python 包及目录为 `maihush`，许可证 MIT。
 
-本次修复候选的隔离联调基线为 **Host 1.3.12 / maibot-plugin-sdk 2.15.0**。manifest 最小/最大版本与运行检查均收紧到上述精确版本；Host 1.3.14 / SDK 2.16.0 尚待独立升级验收。
+原基线为 **Host 1.3.12 / SDK 2.15.0**；本轮新增目标为 **Host 1.3.15（`062d45cf8bd4272ac57d7ec03fcf405e5a458211`）/ SDK 2.16.0 / Linux Python 3.12.15**。两个组合分别记录证据；1.3.13、1.3.14 以及交叉配对仍拒绝加载。新基线原生测试可使用 `tools/run_isolated.py --source-lock tests/fixtures/source-lock-1.3.15.json`，其余参数与原测试一致。
 
 解压安装包到独立插件目录。首次加载默认没有受管理群、没有管理员、没有模型调用。根据 `config.example.toml` 配置 QQ 机器人账号、实际 scope、已有真实 stream_id 和当前群 ID；账号均为字符串。示例全为合成值，不能直接部署。新增路由需要重启；已有路由身份不可在线改绑。`[plugin].config_version = "1"` 是固定 Runner 必需的传输配置，根级 `config_version = 1` 是业务版本。根级 `enabled=false` 会明确清除本插件约束；Host 的插件卸载/禁用会移除守卫，重新启用仍读取持久化期限。
 
@@ -45,3 +47,5 @@ R0.2 最小收口保持版本 0.2.0，以提交 SHA 区分原始构建与收口�
 2026-10-25 联合收口：修正打包器仍要求旧宽版本上限的问题，增加旧上限拒绝回归；完整 T0、120 条确定性规则、原生 T1/T2 与包复建重新执行。三核心插件同时加载时补测 20 路并发发送、配置热更新、重载保持硬期限、睡眠与硬静默的独立否决、公共读取与特权拒绝，以及合成注册 Hook 异常/超时的 ABORT。测试工具和源码指纹随新证据记录；这些结果不是实际 QQ 送达或真实模型效果验收，已知宿主 fail-open 边界保持原样。
 
 接口依据为 [官方插件文档](https://docs.mai-mai.org/plugin/)、固定 [MaiBot 提交](https://github.com/Mai-with-u/MaiBot/tree/5c7637e6913c84d1c3d5e742fa9e95a7e70d3501) 与 [SDK 2.15.0](https://pypi.org/project/maibot-plugin-sdk/2.15.0/)。只读核对 MaiVita / MaiIdentity 契约，未复制其实现或旧 GroupMuter 代码，Host/SDK 不随包分发。
+
+受管理发送最多等待控制队列 200ms；繁忙时返回显式 `MAIHUSH_BUSY` 拒发，不预留许可，不自动补发，已证明无关的路由仍直接放行。Host Hook 超时仍为 1000ms。这个排队保护不等于解决宿主守卫卸载、缺席、熔断后跳过或后置 Hook 改路由的已知失守边界。

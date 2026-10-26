@@ -3,8 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial, wraps
 from hashlib import sha256
 import asyncio
-import importlib.metadata
-import os
+from ..runtime_versions import runtime_descriptor, runtime_supported
 import time
 from maibot_sdk import API, Command, HookHandler, MaiBotPlugin
 from maibot_sdk.types import ErrorPolicy, HookMode, HookOrder
@@ -26,6 +25,18 @@ def serialized(fn):
                 configs=(self.active,self.transition_config)
                 if all(route_for(c,message,outbound=True) is None for c in configs if c is not None): return {'action':'continue'}
             except Denied: pass
+        if fn.__name__=='before_send':
+            # Bound queueing below the Host's 1000ms Hook deadline. Returning
+            # an explicit veto does not increment the Host circuit breaker.
+            # No permit is reserved when this queue budget is exhausted.
+            try:
+                await asyncio.wait_for(self.control_gate.acquire(),timeout=.2)
+            except TimeoutError:
+                return {'action':'abort','reason':'MAIHUSH_BUSY'}
+            try:
+                return await fn(self,*args,**kwargs)
+            finally:
+                self.control_gate.release()
         async with self.control_gate:
             return await fn(self,*args,**kwargs)
     return guarded
@@ -62,7 +73,7 @@ class MaiHushPlugin(MaiBotPlugin):
                 raise
 
     async def on_load(self):
-        if importlib.metadata.version('maibot-plugin-sdk')!='2.15.0' or os.environ.get('MAIBOT_HOST_VERSION')!='1.3.12': raise Denied('UNSUPPORTED_VERSION')
+        if not runtime_supported(): raise Denied('UNSUPPORTED_VERSION')
         self.active=MaiHushConfig.model_validate(self.config.model_dump() if isinstance(self.config,MaiHushConfig) else self.config)
         if self.active.decision.enabled:
             tasks=await self.ctx.llm.get_available_models()
@@ -231,7 +242,7 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.0','host':'1.3.12','sdk':'2.15.0','hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.0',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):

@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 import json
+import importlib.metadata
 import os
 import time
 import uuid
@@ -39,9 +40,9 @@ async def run(work,layer):
     from src.common.data_models.message_component_data_model import MessageSequence,TextComponent,ImageComponent,EmojiComponent,VoiceComponent,ForwardNodeComponent,ForwardComponent,AtComponent
     manager=get_plugin_runtime_manager(); manager.ensure_builtin_hook_specs_registered()
     plugin_dirs=[work/'plugins']+([work/'neighbors'] if layer=='T2' else [])
-    supervisor=PluginSupervisor(plugin_dirs=plugin_dirs,group_name='maihush-test',hook_spec_registry=manager._hook_spec_registry,max_restart_attempts=0,health_check_interval_sec=300,runner_spawn_timeout_sec=25)
+    supervisor=PluginSupervisor(socket_path=os.environ.get('MAIHUSH_TEST_SOCKET_PATH'),plugin_dirs=plugin_dirs,group_name='maihush-test',hook_spec_registry=manager._hook_spec_registry,max_restart_attempts=0,health_check_interval_sec=300,runner_spawn_timeout_sec=25)
     manager._third_party_supervisor=supervisor; manager._register_capability_impls(supervisor)
-    report={'layer':layer,'host':'1.3.12','sdk':'2.15.0','cases':[],'boundary_observations':[],'real_platform_sends':0,'real_model_requests':0,'module_replacements':0,'full_bot_cli':False}
+    report={'layer':layer,'host':os.environ['MAIBOT_HOST_VERSION'],'sdk':importlib.metadata.version('maibot-plugin-sdk'),'cases':[],'boundary_observations':[],'real_platform_sends':0,'real_model_requests':0,'module_replacements':0,'full_bot_cli':False}
     def record(name): report['cases'].append(name)
     def message(text='synthetic output',actor='123456789',stream=STREAM,group='987654321',components=None):
         m=SessionMessage(message_id=uuid.uuid4().hex,timestamp=datetime.now(),platform='qq')
@@ -63,6 +64,8 @@ async def run(work,layer):
         await supervisor.start()
         assert ID in supervisor._registered_plugins,supervisor._registered_plugins
         assert (await call('get_contract'))['data']['hard_control']=='local_command_only'
+        hush_contract=(await call('get_contract'))['data']
+        assert (hush_contract['host'],hush_contract['sdk'])==(report['host'],report['sdk'])
         assert (await call('get_state',{'is_owner':True,'proof_ref':'fake'}))['error']['code']=='UNTRUSTED_CONTEXT'
         assert (await call('call',{'route':ID+'.get_state','payload':{'caller_plugin_id':ID,'verified':True}},CONSUMER))['ok'] is False
         assert (work/'plugins/candidate/config.toml').exists()
@@ -265,6 +268,13 @@ async def run(work,layer):
             path.write_text(tomli_w.dumps(data),encoding='utf8')
         assert await supervisor.reload_plugins([vita_id,identity_id],reason='synthetic-joint-test')
         assert (await call('get_engine_status',plugin=vita_id))['ready']
+        vita_contract=await call('get_integration_contract',plugin=vita_id)
+        identity_contract=(await call('get_contract',plugin=identity_id))['data']
+        for contract in (vita_contract,identity_contract):
+            assert (contract['host'],contract['sdk'])==(report['host'],report['sdk'])
+        assert vita_contract['owner_auth']['enabled'] is False
+        assert identity_contract['cross_plugin_privileged_enabled'] is False
+        record('I08 all three IPC descriptors report the actual Host/SDK; privileged transport remains disabled')
         identity_result=await call('call',{'route':identity_id+'.authorize','payload':{'is_owner':True,'proof_ref':'fake','user_id':'10001'}},CONSUMER)
         assert identity_result['error']['code']=='UNTRUSTED_CONTEXT'
         wake=await call('call',{'route':vita_id+'.request_wakeup','payload':{'verified':True}},CONSUMER)
