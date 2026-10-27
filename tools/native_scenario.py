@@ -264,10 +264,19 @@ async def run(work,layer):
         for folder in ('maibot-maivita-plugin','maibot-maiIdentity-plugin'):
             path=work/'neighbors'/folder/'config.toml'
             data=tomllib.loads(path.read_text(encoding='utf8')); data['plugin']['enabled']=True
-            if folder=='maibot-maivita-plugin': data['instance']['allowed_streams']=[STREAM]
             path.write_text(tomli_w.dumps(data),encoding='utf8')
         assert await supervisor.reload_plugins([vita_id,identity_id],reason='synthetic-joint-test')
         assert (await call('get_engine_status',plugin=vita_id))['ready']
+        assert (await call('get_contract',plugin=identity_id))['data']['ready']
+        record('D01 default Vita and Identity activate over native IPC without acknowledgement, lock path, instance ID or stream list')
+        # Match the observed Snowluma input: platform/account present, scope=None.
+        received=message('synthetic input','10001'); received.scope=None
+        await manager.invoke_hook('chat.receive.after_process',message=serialize_session_message(received))
+        projection=await manager.invoke_hook('maisaka.replyer.before_request',session_id=STREAM,
+            reply_message_id=received.message_id,extra_prompt='synthetic context')
+        prompt=projection.kwargs['extra_prompt']
+        assert '"resolution":"resolved"' in prompt and '"actor":null' in prompt
+        record('D02 actual Host null-scope message resolves author with empty Identity accounts; no administrator or actor granted')
         vita_contract=await call('get_integration_contract',plugin=vita_id)
         identity_contract=(await call('get_contract',plugin=identity_id))['data']
         for contract in (vita_contract,identity_contract):
@@ -312,6 +321,11 @@ async def run(work,layer):
         record('I06 three real cores: hot configuration with 20 concurrent sends and reload preserves hard deadline independently of awake life')
         assert (await command('/maihush unmute'))[0]
         assert await send() is not None
+        before=len(driver.calls)
+        assert (await command('/maivita status'))[0]
+        assert (await command('/maiidentity_status'))[0]
+        assert len(driver.calls)==before+2
+        record('D03 default-install Vita and Identity status commands use native command dispatch and normal send chain')
         for mode in ('error','timeout'):
             await call('test_mode',{'mode':mode},CONSUMER)
             n=len(driver.calls)

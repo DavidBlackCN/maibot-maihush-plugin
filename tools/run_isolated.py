@@ -67,9 +67,9 @@ def stage(work,neighbors=False,package=None):
                     rel=src.relative_to(ref); dest=target/rel; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(src,dest)
                     hashes[folder+'/'+rel.as_posix()]=digest(src)
             if package=='maivita':
-                cfg={'plugin':{'enabled':False,'config_version':'3'},'engine':{'mode':'life'},'instance':{'acknowledgement':'isolated-test-instance','writer_lock':str(work/'vita-writer.lock'),'allowed_streams':['synthetic-test-stream']},'model':{'generate_on_start':False}}
+                cfg={'plugin':{'enabled':False,'config_version':'3'}}
             else:
-                cfg={'plugin':{'enabled':False,'config_version':'3','acknowledgement':'local-operator-reviewed','instance_id':'maihush-test','writer_lock':str(work/'identity-writer.lock')},'identity':{'adapter_namespace':'synthetic-test-adapter','route_scope':'synthetic-test-scope','accounts':[]}}
+                cfg={'plugin':{'enabled':False,'config_version':'3'}}
             (target/'config.toml').write_text(tomli_w.dumps(cfg),encoding='utf8')
         (work/'neighbor-source-hashes.json').write_text(json.dumps(hashes,indent=2),encoding='utf8')
     return candidate
