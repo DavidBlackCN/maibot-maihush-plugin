@@ -1,20 +1,22 @@
-# MaiHush 0.2.1 联动说明
+> 本轮 0.2.2：保留全部静音与权限约束，新增 `/maihush 安静5分钟`、`续期5分钟`、`恢复聊天` 有限中文命令。实际发言者和自身管理员规则仍是唯一依据。无需 Host 补丁。
+
+# MaiHush 0.2.2 联动说明
 
 支持精确组合 Host 1.3.12 / SDK 2.15.0、Host 1.3.15 / SDK 2.16.0。
 
 本版修复显式路由的空 scope：配置 `route_scope = ""` 精确匹配 Host 的 `scope=None`；命名 scope、空字符串消息 scope 和异常类型不会混入。保留已有显式路由及本地管理员设置；Hush 不会自动接管尚未配置的群。协调层会自动核对这些已管理群，无需再次填写路由。
 
-新增只读 API `get_public_route_binding(stream_id)`，仅返回已管理会话的路由字段。现有 MaiCoordinate 0.2.0 使用它核对真实接收消息，免去重复填写内部路由。该 API 不返回管理员名单，不授予发送或静音控制权限。
+新增只读 API `get_public_route_binding(stream_id)`，仅返回已管理会话的路由字段。现有 MaiCoordinate 0.3.0 使用它核对真实接收消息，免去重复填写内部路由。该 API 不返回管理员名单，不授予发送或静音控制权限。
 
 Vita 睡眠与 Hush 硬静音独立：唤醒不会解除硬静音，解除硬静音不会唤醒。所有联动表达仍经过普通 SendService。Hook 正常注册和运行时有效；Host 卸载、熔断或绕过 Hook 的直接发送不具备全局拒绝保证。
 
-Hush 的 H01/H02/H03 仍未开放。Identity/Vita 的可选有限命令 Host 扩展不授予 Hush 特权。自然语言克制和自主克制沿用现有可选配置与预算，不因本版升级自动开启模型调用。
+Hush 的 H01/H02/H03 仍未开放。Identity/Vita 使用官方有限命令入口，不需要 Host 补丁，也不授予 Hush 特权。自然语言克制和自主克制沿用现有可选配置与预算，不因本版升级自动开启模型调用。
 
 ---
 
 > 2026-10-26 兼容性修订：运行时仅接受 `Host 1.3.12 / SDK 2.15.0` 与 `Host 1.3.15 / SDK 2.16.0` 两个明确配对；Manifest 的上下限不表示支持中间版本或混搭。部署时使用 Bot 自己的虚拟环境，不要用系统 Python，也不要单独降级 SDK。新版验收证据与旧版分开记录；真实 QQ、生产部署以及 H01/H02/H03 均未因此获得验收或授权。
 
-# MaiHush 0.2.0
+# MaiHush 0.2.2
 
 MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)。正式名称、Python 包及目录为 `maihush`，许可证 MIT。
 
