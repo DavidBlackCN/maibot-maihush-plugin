@@ -31,7 +31,9 @@ class Route(Strict):
 
     @model_validator(mode='after')
     def validate_route(self):
-        if not self.adapter_namespace or not self.route_scope or not self.stream_id:
+        if self.route_scope != self.route_scope.strip() or '*' in self.route_scope:
+            raise ValueError('route_scope must be exact; empty means Host scope=None')
+        if not self.adapter_namespace or not self.stream_id:
             raise ValueError('explicit route identity required')
         accounts = [self.bot_account_id, self.group_id, *self.owner_accounts, *self.admin_accounts, *self.other_bot_accounts]
         if any(not re.fullmatch(r'[1-9][0-9]{4,19}', a) for a in accounts):

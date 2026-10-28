@@ -49,7 +49,7 @@ def test_changed_scope_waits_for_config_publication(tmp_path,field,enable,phase)
     asyncio.run(scenario())
 
 @pytest.mark.parametrize('enable',[True,False])
-@pytest.mark.parametrize('outcome',['failure','cancel','guard_timeout','unload'])
+@pytest.mark.parametrize('outcome',['failure','cancel','overload_veto','unload'])
 def test_transition_failure_cancel_timeout_and_unload(tmp_path,enable,outcome):
     async def scenario():
         raw=config(decision={'enabled':False}).model_dump(); raw['routes'][0]['enabled']=not enable
@@ -68,10 +68,12 @@ def test_transition_failure_cancel_timeout_and_unload(tmp_path,enable,outcome):
             update=asyncio.create_task(p.on_config_update('self',raw,'outcome'))
             await asyncio.wait_for(entered.wait(),1)
             guards=[asyncio.create_task(p.before_send(message=message(mid=str(i)))) for i in range(10)]
-            await asyncio.sleep(.01); assert not any(g.done() for g in guards)
+            await asyncio.sleep(.01)
+            assert all(not g.done() or g.result()=={'action':'abort','reason':'MAIHUSH_BUSY'} for g in guards)
+            assert not guards[0].done()
             if outcome=='cancel': update.cancel()
-            if outcome=='guard_timeout':
-                with pytest.raises(asyncio.TimeoutError): await asyncio.wait_for(p.before_send(message=message(mid='timeout')),.02)
+            if outcome=='overload_veto':
+                assert await asyncio.wait_for(p.before_send(message=message(mid='overload')),.02)=={'action':'abort','reason':'MAIHUSH_BUSY'}
             if outcome=='unload': unload=asyncio.create_task(p.on_unload()); await asyncio.sleep(.01)
             release.set(); await asyncio.gather(update,return_exceptions=True)
             results=await asyncio.gather(*guards)
@@ -87,7 +89,8 @@ def test_transition_failure_cancel_timeout_and_unload(tmp_path,enable,outcome):
                         assert (await p.io(p.service.state,STREAM)).hard_until==deadline
                 else:
                     assert p.active.routes[0].enabled==enable
-                    assert all(r['action']=='continue' for r in results)
+                    assert all(r['action']=='continue' or r=={'action':'abort','reason':'MAIHUSH_BUSY'} for r in results)
+                    assert (await p.before_send(message=message(mid='after-update')))['action']=='continue'
         finally:
             release.set()
             if update: await asyncio.gather(update,return_exceptions=True)
@@ -111,7 +114,9 @@ def test_waited_guard_uses_current_hard_state_and_reload_preserves_it(tmp_path):
             p.io=delayed; raw=cfg.model_dump(); raw['autonomous']['enabled']=True
             update=asyncio.create_task(p.on_config_update('self',raw,'retain-hard'))
             await entered.wait(); guards=[asyncio.create_task(p.before_send(message=message(mid=str(i)))) for i in range(20)]
-            await asyncio.sleep(.01); assert not any(g.done() for g in guards)
+            await asyncio.sleep(.01)
+            assert all(not g.done() or g.result()=={'action':'abort','reason':'MAIHUSH_BUSY'} for g in guards)
+            assert not guards[0].done()
             release.set(); await update
             assert all(r['action']=='abort' for r in await asyncio.gather(*guards))
             assert (await p.io(p.service.state,STREAM)).hard_until==deadline

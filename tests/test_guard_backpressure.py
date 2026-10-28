@@ -41,3 +41,27 @@ def test_cancelled_waiter_does_not_release_someone_elses_control_gate():
         assert plugin.control_gate.locked()
         plugin.control_gate.release()
     asyncio.run(scenario())
+
+
+def test_inflight_storage_admits_no_additional_waiters_and_cancel_releases_admission():
+    async def scenario():
+        plugin=MaiHushPlugin();plugin.active=config();plugin.ready=True
+        plugin.service=SimpleNamespace(guard=object())
+        entered=asyncio.Event();release=asyncio.Event()
+        async def io(*args):
+            entered.set();await release.wait();return True
+        plugin.io=AsyncMock(side_effect=io)
+        first=asyncio.create_task(plugin.before_send(message()))
+        await entered.wait()
+        assert plugin.send_inflight
+        replies=await asyncio.wait_for(asyncio.gather(*(plugin.before_send(message()) for _ in range(100))),.1)
+        assert all(r['reason']=='MAIHUSH_BUSY' for r in replies)
+        plugin.io.assert_awaited_once()
+        assert (await plugin.before_send(message(stream='other',group='99999')))['action']=='continue'
+        first.cancel()
+        try: await first
+        except asyncio.CancelledError: pass
+        assert not plugin.send_inflight and not plugin.control_gate.locked()
+        release.set()
+        assert (await plugin.before_send(message()))['action']=='continue'
+    asyncio.run(scenario())

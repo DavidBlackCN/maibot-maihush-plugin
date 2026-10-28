@@ -45,7 +45,7 @@ def route_for(config, message, *, outbound=False):
             raise Denied('MALFORMED_ROUTE')
         if not isinstance(platform,str): raise Denied('MALFORMED_ROUTE')
         return None
-    if not isinstance(group,dict) or (platform,message.get('account_id'),message.get('scope'),group.get('group_id')) != (route.platform,route.bot_account_id,route.route_scope,route.group_id):
+    if not isinstance(group,dict) or (platform,message.get('account_id'),message.get('scope'),group.get('group_id')) != (route.platform,route.bot_account_id,route.route_scope or None,route.group_id):
         raise Denied('SCOPE_MISMATCH')
     return route
 

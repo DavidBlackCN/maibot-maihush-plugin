@@ -26,17 +26,26 @@ def serialized(fn):
                 if all(route_for(c,message,outbound=True) is None for c in configs if c is not None): return {'action':'continue'}
             except Denied: pass
         if fn.__name__=='before_send':
+            # Admit at most one managed send into the async lock/SQLite path.
+            # A burst must not create hundreds of timeout tasks and provoke
+            # Host circuit-breaking, which skips registered guards afterwards.
+            if self.send_inflight:
+                return {'action':'abort','reason':'MAIHUSH_BUSY'}
+            self.send_inflight=True
             # Bound queueing below the Host's 1000ms Hook deadline. Returning
             # an explicit veto does not increment the Host circuit breaker.
             # No permit is reserved when this queue budget is exhausted.
             try:
-                await asyncio.wait_for(self.control_gate.acquire(),timeout=.2)
-            except TimeoutError:
-                return {'action':'abort','reason':'MAIHUSH_BUSY'}
-            try:
-                return await fn(self,*args,**kwargs)
+                try:
+                    await asyncio.wait_for(self.control_gate.acquire(),timeout=.2)
+                except TimeoutError:
+                    return {'action':'abort','reason':'MAIHUSH_BUSY'}
+                try:
+                    return await fn(self,*args,**kwargs)
+                finally:
+                    self.control_gate.release()
             finally:
-                self.control_gate.release()
+                self.send_inflight=False
         async with self.control_gate:
             return await fn(self,*args,**kwargs)
     return guarded
@@ -50,6 +59,7 @@ class MaiHushPlugin(MaiBotPlugin):
         self.ready=False; self.futures=set(); self.maintenance=None
         self.history=defaultdict(lambda:deque(maxlen=20)); self.sent=defaultdict(lambda:deque(maxlen=256)); self.error_after={}
         self.control_gate=asyncio.Lock(); self.quiescing=False
+        self.send_inflight=False
         self.transition_config=None
         self.config_tasks=set()
         self.seen=defaultdict(dict); self.inbound=defaultdict(lambda:deque(maxlen=256)); self.inbound_seen=defaultdict(dict)
@@ -226,7 +236,7 @@ class MaiHushPlugin(MaiBotPlugin):
                 await self.ctx.send.text(text,stream); return True,None,2
             if route.role(e.actor)=='member': raise Denied('PERMISSION_DENIED')
             if op=='diagnostics' and len(parts)==2:
-                await self.ctx.send.text(f'MaiHush 0.2.0 health={self.service.health}/{self.service.reason}; revision={self.service.revision}; semantic={self.active.decision.enabled}; autonomous={self.active.autonomous.enabled}; H01/H02/H03=false; queue={len(self.worker.pending)}; queue_rejection={self.worker.last_rejection}',stream)
+                await self.ctx.send.text(f'MaiHush 0.2.1 health={self.service.health}/{self.service.reason}; revision={self.service.revision}; semantic={self.active.decision.enabled}; autonomous={self.active.autonomous.enabled}; H01/H02/H03=false; queue={len(self.worker.pending)}; queue_rejection={self.worker.last_rejection}',stream)
                 return True,None,2
             if op not in ('mute','renew','unmute') or op=='renew' and len(parts)!=3 or op=='unmute' and len(parts)!=2: raise Denied('INVALID_COMMAND')
             seconds=duration(parts[2],self.active.hard.max_seconds) if len(parts)==3 else self.active.hard.default_seconds
@@ -242,11 +252,22 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.0',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.1',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):
         return {'api_version':1,'ok':False,'data':None,'error':{'code':'UNTRUSTED_CONTEXT','retryable':False}}
+
+    @API('get_public_route_binding',version='1',public=True)
+    @serialized
+    async def get_public_route_binding(self,stream_id=None,**kwargs):
+        # Caller must already know the session. No route enumeration, admin
+        # lists, requester identity, text, or send permit is exposed.
+        route=self.active.route(stream_id) if self.ready and not self.quiescing and type(stream_id) is str else None
+        if route is None:
+            return {'api_version':1,'ok':False,'data':None,'error':{'code':'ROUTE_UNAVAILABLE','retryable':False}}
+        fields=('platform','adapter_namespace','bot_account_id','route_scope','group_id','stream_id')
+        return {'api_version':1,'ok':True,'data':{k:getattr(route,k) for k in fields},'error':None}
 
     @API('get_public_constraints',version='1',public=True)
     @serialized
