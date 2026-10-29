@@ -1,67 +1,179 @@
-> 本轮 0.2.2：保留全部静音与权限约束，新增 `/maihush 安静5分钟`、`续期5分钟`、`恢复聊天` 有限中文命令。实际发言者和自身管理员规则仍是唯一依据。无需 Host 补丁。
+# MaiHush
 
-# MaiHush 0.2.2 联动说明
+为 MaiBot 群聊提供有限时长的静音与发言克制，支持本地管理员控制及可选的自然语言劝静。
 
-支持精确组合 Host 1.3.12 / SDK 2.15.0、Host 1.3.15 / SDK 2.16.0。
+- 当前版本：`0.2.3`
+- MaiBot 版本范围：`1.3.12–1.3.15`
+- Plugin SDK 版本范围：`2.15.0–2.16.0`
+- 项目地址：[DavidBlackCN/maibot-maihush-plugin](https://github.com/DavidBlackCN/maibot-maihush-plugin)
 
-本版修复显式路由的空 scope：配置 `route_scope = ""` 精确匹配 Host 的 `scope=None`；命名 scope、空字符串消息 scope 和异常类型不会混入。保留已有显式路由及本地管理员设置；Hush 不会自动接管尚未配置的群。协调层会自动核对这些已管理群，无需再次填写路由。
+仅支持精确配对 **Host 1.3.12 / SDK 2.15.0**、**Host 1.3.15 / SDK 2.16.0**，不支持中间版本或交叉配对。无需私有 Host 补丁，不依赖 MaiCoordinate。
 
-新增只读 API `get_public_route_binding(stream_id)`，仅返回已管理会话的路由字段。现有 MaiCoordinate 0.3.0 使用它核对真实接收消息，免去重复填写内部路由。该 API 不返回管理员名单，不授予发送或静音控制权限。
+## 功能
 
-Vita 睡眠与 Hush 硬静音独立：唤醒不会解除硬静音，解除硬静音不会唤醒。所有联动表达仍经过普通 SendService。Hook 正常注册和运行时有效；Host 卸载、熔断或绕过 Hook 的直接发送不具备全局拒绝保证。
+### 管理员硬静音
 
-Hush 的 H01/H02/H03 仍未开放。Identity/Vita 使用官方有限命令入口，不需要 Host 补丁，也不授予 Hush 特权。自然语言克制和自主克制沿用现有可选配置与预算，不因本版升级自动开启模型调用。
+在已配置的群内用 `/maihush mute 20m` 请求静音，`renew` 延长期限，`unmute` 解除本插件约束。权限仅由该路由的 `owner_accounts` / `admin_accounts` 决定，群管标签、昵称、关系和 MaiIdentity 权限不替代这两份名单。
 
----
+硬静音独立于 MaiVita 睡眠。唤醒 Vita 不解除静音，解除静音也不唤醒 Vita。没有永久静音，最长 24 小时；控制操作默认无成功群回执。
 
-> 2026-10-26 兼容性修订：运行时仅接受 `Host 1.3.12 / SDK 2.15.0` 与 `Host 1.3.15 / SDK 2.16.0` 两个明确配对；Manifest 的上下限不表示支持中间版本或混搭。部署时使用 Bot 自己的虚拟环境，不要用系统 Python，也不要单独降级 SDK。新版验收证据与旧版分开记录；真实 QQ、生产部署以及 H01/H02/H03 均未因此获得验收或授权。
+### 自然语言劝静（可选）
 
-# MaiHush 0.2.2
+开启 `decision.enabled` 并指定 Host 已有模型任务后，插件可判断明确劝静、间接抱怨和重新邀请。普通成员也能提出软请求，管理员建议得到优先关注，但模型不保证服从；间接抱怨最多触发克制，单独 @ 不恢复。
 
-MaiBot 群聊发言约束插件，从零实现。[源码仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)。正式名称、Python 包及目录为 `maihush`，许可证 MIT。
+普通软静默最多 300 秒，管理级自然语言请求最多 600 秒，均受群与请求者预算约束。邀请恢复仍检查请求来源和最短停留时间，不能借邀请撤销他人的有效管理级约束。默认不开启，不产生模型调用。
 
-原基线为 **Host 1.3.12 / SDK 2.15.0**；本轮新增目标为 **Host 1.3.15（`062d45cf8bd4272ac57d7ec03fcf405e5a458211`）/ SDK 2.16.0 / Linux Python 3.12.15**。两个组合分别记录证据；1.3.13、1.3.14 以及交叉配对仍拒绝加载。新基线原生测试可使用 `tools/run_isolated.py --source-lock tests/fixtures/source-lock-1.3.15.json`，其余参数与原测试一致。
+### 无模型自主克制（可选）
 
-解压安装包到独立插件目录。首次加载默认没有受管理群、没有管理员、没有模型调用。根据 `config.example.toml` 配置 QQ 机器人账号、实际 scope、已有真实 stream_id 和当前群 ID；账号均为字符串。示例全为合成值，不能直接部署。新增路由需要重启；已有路由身份不可在线改绑。`[plugin].config_version = "1"` 是固定 Runner 必需的传输配置，根级 `config_version = 1` 是业务版本。根级 `enabled=false` 会明确清除本插件约束；Host 的插件卸载/禁用会移除守卫，重新启用仍读取持久化期限。
+`autonomous.enabled` 独立于模型开关，根据正常发送链确认成功的消息统计过度发言。默认阈值为 120 秒窗口内至少 8 次连续成功发送、相邻间隔不超过 20 秒、观察到的机器人占比至少 70%，满足后有限时长降频发言，不进入硬静音，也不调用模型。
 
-命令只操作真实消息所在的当前群。本地 `owner_accounts` / `admin_accounts` 是独立运维信任根；群管标签、昵称、关系、模型、MaiIdentity JSON proof 均不授权。适配器 namespace 是本地绑定标签，Host envelope 没有可单独认证的 namespace；运维必须保证 account/scope/session 对应唯一已审计适配器。受信 Host 和已安装插件属于部署边界，不能隔离恶意同进程插件。
+### 发送守卫与状态保留
+
+正常 Host 发送链上的文字、媒体、分段消息和插件主动消息都接受守卫检查。约束期限、预算与冷却持久保存，重载不自动重置；恢复后不报到、不补发旧消息。只读公开约束 API 可供其他插件查询，不授予静音控制或发送权限。
+
+## 安装
+
+### 1. 放置插件
+
+将插件放入 MaiBot 的 `plugins`，同一 ID 只安装一份，使用 Bot 自己的 Python 环境：
+
+```text
+MaiBot/
+└── plugins/
+    └── maibot-maihush-plugin/
+        ├── _manifest.json
+        ├── plugin.py
+        └── maihush/
+```
+
+### 2. 配置受管理群
+
+首次加载默认没有受管理群和管理员。[config.example.toml](config.example.toml) 中的路由全部是**停用的合成示例**。填写真实 Bot QQ、群号、Host 已有 stream_id、实际 scope 和本地适配器标签，确认管理员名单后才设置该路由 `enabled = true`。
+
+`route_scope = ""` 只匹配 Host 的 `scope=None`，不是通配符。Hush 不自动接管其他群；新增路由需要重启，已有路由身份不能在线改绑。部署须保证 account/scope/session 对应唯一可信适配器。
+
+### 3. 启动并查看
+
+启动后在配置群里发送 `/maihush status`。暂不启用 `decision` 和 `autonomous` 即可使用管理员硬静音。状态和错误消息也受正常发送守卫限制，没收到消息不等于操作失败或成功；可查看服务日志与持久审计。
+
+### 从旧版本更新
+
+停机备份代码、配置及完整 SDK 数据目录，再替换代码。数据库位于 `data_dir/maihush.sqlite3`，保留期限、撤销和审计状态；不删库重建。根级 `config_version = 1` 与 `[plugin] config_version = "1"` 必须同时保留，前者为业务版本，后者供 Runner 使用。
+
+根级 `enabled = false` 会清除本插件约束；Host 卸载或禁用则移除守卫，重新启用仍读取持久期限。不要用这两种不同操作互相替代。跨实例或已绑定路由的变更需离线迁移，当前无自动迁移工具。回滚应停机成套恢复匹配的代码、配置与数据。
+
+## 命令
+
+只作用于消息所在的已启用群，不支持指定他群或全局操作。
 
 | 命令 | 权限与行为 |
 | --- | --- |
-| `/maihush help`、`status` | 当前启用群成员；查询也经过正常发送守卫 |
-| `/maihush mute [20m]` | 当前路由本地管理员；默认 1200 秒，不能缩短已有更长期限 |
-| `/maihush renew 10m` | 已有硬静默；取旧期限与当前时刻加时长的较大值，不累加 |
-| `/maihush unmute` | 清除自己的约束，设置 60 秒软请求冷却，无自动报到 |
-| `/maihush diagnostics` | 本地管理员；版本、健康态和功能开关，不含名单 |
+| `/maihush help`、`/maihush status` | 当前群成员查看帮助或状态 |
+| `/maihush mute [20m]` | 本地管理员请求硬静音，默认 1200 秒，不缩短已有期限 |
+| `/maihush renew 10m` | 本地管理员续期已有硬静音；取旧期限和“当前时刻加时长”的较大值，不累加 |
+| `/maihush unmute` | 本地管理员解除本插件约束，进入软请求冷却，不自动报到 |
+| `/maihush diagnostics` | 本地管理员查看健康、版本与开关，不公开名单 |
+| `/maihush 安静5分钟` | 硬静音中文写法，权限不变 |
+| `/maihush 续期5分钟` | 续期中文写法，权限不变 |
+| `/maihush 恢复聊天` | 解除约束中文写法，权限不变 |
 
-时长只接受 ASCII 正整数加可选 `s/m/h`，硬上限 86400 秒，无永久静默，不支持他群或全局参数。控制动作默认没有成功群回执。Host 的组件调用成功仅代表处理函数执行成功，不代表业务授权或平台送达；本地 SQLite 审计是操作结果依据。错误消息也会被静默守卫拦截。
+英文时长接受 ASCII 正整数和可选 `s` / `m` / `h`，不超过 86400 秒。命令成功处理不等于平台消息已送达。
 
-自然语言功能默认关闭。只有明确选择 **Host 已存在的任务**，设置 `decision.task_name` 并开启 `decision.enabled` 后才调用 SDK 模型，不改全局模型配置。不接受具体模型覆盖 `model_name`。普通人与管理员都经过有界社交裁判，管理员优先关注但不保证服从；无随机顶嘴。候选分直接劝静、间接抱怨、明确重新邀请；间接抱怨最多克制。普通请求在确认最近参与少于 3 次时先克制；管理员清晰建议可短默，模型仍可选择 keep。单独 @ 不恢复。
+## 配置
 
-目标优先使用真实结构化 @ 的 `target_user_id`；行首“麦麦／maimai／maibot”也可产生低信任候选。“你／麦／bot”单独不证明目标，仅在同一作者 30 秒内有直接交流且观察到本流近期成功发送时，允许有限上下文补足。昵称、身份自称、转发、混杂媒体、否定和歧义保守拒绝；引号内内容不能单独触发，但引号外的明确邀请可独立候选。规则可能漏判，未验证真实模型社交效果。
+完整字段、范围、默认值与跨字段约束见 [config.example.toml](config.example.toml)。
 
-软约束持久保存请求者摘要引用、路由摘要、原始等级与有效 claim。原请求者邀请至少停留 10 秒；普通第三方至少 30 秒，且不能取消有效管理级 claim；别的管理级请求未到期时，Owner 邀请也不能直接抹去。无来源的旧软状态保留截止时间，等待自然到期或授权命令解除。恢复不报到、不补发旧消息。短恢复不重置尚未结束的 episode 截止或小时预算。
+### 路由与管理员
 
-同流已有候选时，包括新的管理员建议，队列明确拒绝为 `STREAM_PENDING_RETRY_AFTER_COMPLETION`，在本地日志和 diagnostics 记录，不自动重试、不重复扣调用额度。跨流继续采用 Owner/Admin/Owner/Member 加权公平调度，最多两个模型调用。静默以事务提交成功为生效点；重载先取消并等待旧模型结束，再串行发布配置，旧票据失效。
+```toml
+[[routes]]
+# 先填写真实字段再启用；以下账号和 ID 仅为结构示例
+enabled = false
+platform = "qq"
+adapter_namespace = "host-qq"
+bot_account_id = "123456789"
+# 若真实 Host scope=None 则留空；否则填写精确 scope
+route_scope = ""
+group_id = "987654321"
+stream_id = "替换成Host实际会话ID"
+# QQ 账号均为字符串，不能互相重复或包含 Bot 自身
+owner_accounts = []
+admin_accounts = []
+other_bot_accounts = []
+```
 
-配置切换以 `active` 发布为守卫配置的生效边界；数据库提交到发布之间，过渡配置仍受同一配置门保护。只有同时明确不属于当前与过渡配置的路由才直接放行，其余发送等待切换结束后按有效配置重判；失败保留旧配置，取消配置 RPC 仍等待内部提交/发布完成。显式禁用仍按原语义清除本插件约束，重新启用不会重造被清除的静默。等待超过 Host Hook 时限可触发 ABORT；已经通过守卫的发送不可撤回。
+### 软约束、硬静音与恢复
 
-可独立开启 `[autonomous].enabled=true`：即使 `decision.enabled=false`，也能只根据正常发送链 `after_send(sent=True)` 进行本地自主克制，不调用模型。默认关闭；默认 120 秒窗口内至少 8 次连续成功发送、相邻不超过 20 秒、观察到的机器人占比至少 70%，才进入最多 60 秒 RESTRAINED；每群冷却 600 秒，小时预算 180 秒，并共享既有克制小时上限。不进入软静默或硬静默，不覆盖已有约束。失败与被拦截不计数；本流消息 ID 在一小时内去重，内存上限 4096 个，满时保守不再累计新 ID。重载清空内存统计，但已提交的期限、冷却和预算保留；未观察到的群聊或绕行发送会使统计不完整。
+```toml
+[hard]
+# 默认 20 分钟，最多 24 小时
+default_seconds = 1200
+max_seconds = 86400
 
-软态为 NORMAL / RESTRAINED / SOFT_SILENT / RECOVERING；硬态独立为 NONE / HARD_SILENT。普通软静默单次最多 300 秒，管理员自然语言最多 600 秒；episode 最多 600 秒，群滚动小时并集最多 900 秒，请求者分别最多 300/600 秒。事务仅预留增量，提前恢复仅释放未发生区间；请求、额度、调用预算、冷却和期限重启保留。克制与恢复间隔默认 30/60 秒，分段可能仅第一段获准。模型超时、错误 JSON、未知字段、过期或版本失配均不新增静默。
+[restraint]
+# 克制时发送至少间隔 30 秒
+min_send_interval_seconds = 30
+max_seconds = 120
+hour_budget_seconds = 600
 
-正常 SendService 路径的文本、媒体、分段和其他插件主动消息都受 BLOCKING/ABORT 守卫约束，没有文本、空串、tag 或 receipt 豁免。after_send 仅观察成功统计并可提交自主克制，不退款或解锁。明确其他账号、scope、平台的无关路由先排除；管理 session 冲突或不能判定的结构仍拒绝。H01/H02/H03 只允许 false。没有公共硬写 API 或 silence Tool；get_contract@1 仅描述，get_state@1 一律 UNTRUSTED_CONTEXT。新增 get_public_constraints@1 接受精确 stream_id，返回最小公开约束摘要、路由绑定摘要、版本、健康状态和最多五秒时效；读取不调用 guard、不落库、不扣额度、不预约节流。不返回管理员、请求者、原始文本或硬静默完整期限。解除 MaiHush 不唤醒 MaiVita、不改频率。
+[recovery]
+# 恢复期 60 秒，发送至少间隔 60 秒
+duration_seconds = 60
+min_send_interval_seconds = 60
+invitation_cooldown_seconds = 60
+```
 
-已知 Host 边界：注册且被调用的 Hook 异常/超时可 ABORT；熔断、Runner 缺席/崩溃、卸载、禁用、关闭和无目标可能跳过守卫。已通过守卫的在途发送不可撤回，后续 Hook 改路由及直接 Platform IO/网关发送不在保证内。处理器级 ABORT 的意外异常也可能影响无关路由。插件不是平台禁言或进程故障时的全局封锁。
+`[soft]` 设置普通与管理级请求时长、连续静默上限、群和请求者滚动小时预算及冷却。降低上限时须同时调整默认时长和预算，避免配置不一致。硬静音独立于 NORMAL / RESTRAINED / SOFT_SILENT / RECOVERING 四种软状态。
 
-数据库固定保存在 SDK `data_dir/maihush.sqlite3`，单写入者锁、未知 schema/损坏库拒绝启动，不自动删库。运行中存储异常进入 DEGRADED，拒绝新写，已知约束按原期限到期；无可信状态时保守拦截。时钟后跳不补发额度；修复需本地停机、核对时钟和数据后重载。跨实例/已绑定路由的变更需要独立离线迁移，首版不提供自动迁移工具。卸载不删除持久化状态。
+### 模型裁判
 
-测试源码与固定源锁在 `tests/`，原生隔离脚本在 `tools/run_isolated.py`，生成证据必须指定仓库外目录。T0 预置模型端口不证明 IPC 或语义效果；T1/T2 使用原始 Runner、Host 能力/分发/发送链，末端为计数测试驱动。联合检查只覆盖 MaiVita 睡眠否决、MaiHush 硬约束及 MaiIdentity 授权拒绝，生活状态为隔离合成 fixture。未完成真实 QQ、真实模型效果、完整 bot CLI、长期运行与生产验收；不报告模型准确率。
+```toml
+[decision]
+# 显式启用才调用模型；先在 Host 配置好任务
+enabled = false
+task_name = ""
+# 不支持直接覆盖具体模型，必须留空
+model_name = ""
+timeout_seconds = 8
+# 必须大于 timeout_seconds
+candidate_ttl_seconds = 15
+```
 
-R0.2 最小收口保持版本 0.2.0，以提交 SHA 区分原始构建与收口构建。冻结定位为 **Stage 01 · Integration Ready Candidate（单体基础门禁）**；门禁包括完整 T0、固定 Host/SDK 原生 T1/T2、实际安装包及确定性复建。配置提交/发布的精确屏障测试属于 T0；原生并发配置 RPC、业务拒绝保留旧状态和硬截止重载另行验证。此定位不代表 H01/H02/H03 联动或生产验收完成。
+可配置每群/实例调用预算、队列、上下文和输出上限。同群已有候选时新候选会拒绝，不自动重试。模型超时、错误格式、过期或版本失配不会新增静默。
 
-2026-10-25 联合收口：修正打包器仍要求旧宽版本上限的问题，增加旧上限拒绝回归；完整 T0、120 条确定性规则、原生 T1/T2 与包复建重新执行。三核心插件同时加载时补测 20 路并发发送、配置热更新、重载保持硬期限、睡眠与硬静默的独立否决、公共读取与特权拒绝，以及合成注册 Hook 异常/超时的 ABORT。测试工具和源码指纹随新证据记录；这些结果不是实际 QQ 送达或真实模型效果验收，已知宿主 fail-open 边界保持原样。
+### 自主克制与存储
 
-接口依据为 [官方插件文档](https://docs.mai-mai.org/plugin/)、固定 [MaiBot 提交](https://github.com/Mai-with-u/MaiBot/tree/5c7637e6913c84d1c3d5e742fa9e95a7e70d3501) 与 [SDK 2.15.0](https://pypi.org/project/maibot-plugin-sdk/2.15.0/)。只读核对 MaiVita / MaiIdentity 契约，未复制其实现或旧 GroupMuter 代码，Host/SDK 不随包分发。
+```toml
+[autonomous]
+# 独立的本地统计开关，不调用模型
+enabled = false
+window_seconds = 120
+min_successful_sends = 8
 
-受管理发送最多等待控制队列 200ms；繁忙时返回显式 `MAIHUSH_BUSY` 拒发，不预留许可，不自动补发，已证明无关的路由仍直接放行。Host Hook 超时仍为 1000ms。这个排队保护不等于解决宿主守卫卸载、缺席、熔断后跳过或后置 Hook 改路由的已知失守边界。
+[storage]
+# 审计保留天数与请求保留小时数
+audit_retention_days = 7
+request_retention_hours = 24
+```
+
+`[control] acknowledgements_enabled` 和 `[integrations]` 的 H01/H02/H03 开关只能为 false。没有静音回执豁免、全局频率覆盖或通用跨插件授权。
+
+## 自 v0.2.0 以来的修改
+
+- v0.2.2：新增有限中文命令，保持真实作者核对和本地权限规则。
+- v0.2.1：空 scope 精确匹配、公开路由绑定查询、受管理发送排队上限与配置切换保护。
+- v0.2.0：自然语言软约束、邀请恢复和无模型自主克制。
+
+完整变更见 [UPDATE_NOTES.md](UPDATE_NOTES.md)。
+
+## 已知限制
+
+这不是平台级禁言。Host 跳过守卫、插件卸载或熔断、直接平台发送、后置 Hook 改路由等情况不在拦截保证内；已通过守卫的在途消息不可撤回。存储错误或时钟回跳需停机核对数据，不能清库“解锁”。自然语言可能漏判；未观察到的消息会使自主克制统计不完整。
+
+## 鸣谢
+
+感谢 MaiBot、插件 SDK 及社区文档。本插件独立实现，参考 MaiVita / MaiIdentity 的公开契约，未复制旧 GroupMuter 实现。
+
+## 许可
+
+[MIT](LICENSE)。

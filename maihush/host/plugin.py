@@ -237,7 +237,7 @@ class MaiHushPlugin(MaiBotPlugin):
                 await self.ctx.send.text(text,stream); return True,None,2
             if route.role(e.actor)=='member': raise Denied('PERMISSION_DENIED')
             if op=='diagnostics' and len(parts)==2:
-                await self.ctx.send.text(f'MaiHush 0.2.2 health={self.service.health}/{self.service.reason}; revision={self.service.revision}; semantic={self.active.decision.enabled}; autonomous={self.active.autonomous.enabled}; H01/H02/H03=false; queue={len(self.worker.pending)}; queue_rejection={self.worker.last_rejection}',stream)
+                await self.ctx.send.text(f'MaiHush 0.2.3 health={self.service.health}/{self.service.reason}; revision={self.service.revision}; semantic={self.active.decision.enabled}; autonomous={self.active.autonomous.enabled}; H01/H02/H03=false; queue={len(self.worker.pending)}; queue_rejection={self.worker.last_rejection}',stream)
                 return True,None,2
             if op not in ('mute','renew','unmute') or op=='renew' and len(parts)!=3 or op=='unmute' and len(parts)!=2: raise Denied('INVALID_COMMAND')
             seconds=duration(parts[2],self.active.hard.max_seconds) if len(parts)==3 else self.active.hard.default_seconds
@@ -253,7 +253,7 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.2',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.3',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):

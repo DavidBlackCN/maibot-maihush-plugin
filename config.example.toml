@@ -1,85 +1,218 @@
-# Synthetic, all routes disabled. Copy to config.toml and review locally.
+# 示例所有路由默认停用；字段均可省略用默认值，启用真实路由时必须替换合成身份。
+# 所有 QQ 数组均为 5–20 位非零开头数字字符串；各角色与 Bot 账号不能重复。
+# 业务配置格式版本，用于识别配置结构；仅允许整数 1，默认 1。
 config_version = 1
+# MaiHush 业务总开关；false 清除约束，适合临时停用管理；布尔值，默认 true。
 enabled = true
+# 本地实例标识，用于区分部署实例；必须是非空白字符串，默认 "maihush-local"。
+# 多实例部署可使用 "maihush-secondary" 等稳定名称。
 instance_id = "maihush-local"
 
+# Runner 传输配置，需与根级业务配置同时保留。
 [plugin]
+# Runner 传输层配置版本，供 Host 识别配置格式；仅允许字符串 "1"，默认 "1"。
 config_version = "1"
+# Runner 插件启用标志，供 Host 管理插件加载；布尔值，默认 true。
 enabled = true
 
+# 受管理群路由：示例为停用的合成值；全部核对后才能启用，可重复添加。
 [[routes]]
+# 是否管理本条群路由；核对全部真实身份后才设为 true，布尔值，默认 false。
 enabled = false
+# 路由的平台标识，用于限定匹配的平台；当前仅支持字符串 "qq"，默认 "qq"。
 platform = "qq"
+# 本地适配器标签，用于区分路由所属适配器；非空字符串，默认 "synthetic-test-adapter"。
+# 部署时替换为实际适配器标签，不能直接沿用合成示例。
 adapter_namespace = "synthetic-test-adapter"
+# 受管 Bot 的 QQ 账号，避免把其他账号的消息纳入管理；5–20 位非零开头数字字符串。
+# 默认 "123456789" 是合成示例，启用前替换为实际登录账号。
 bot_account_id = "123456789"
+# 受管理群的精确 scope，用于隔离同账号下的不同路由；字符串，不允许通配符和首尾空格。
+# 默认 "synthetic-test-scope" 是合成示例；空字符串 "" 精确匹配 Host 的 scope=None。
+# 例：SnowLuma 通常填 ""；其他适配器按其上报的真实 scope 填写。
 route_scope = "synthetic-test-scope"
+# 受管理群号，限定静默生效的群；5–20 位非零开头数字字符串。
+# 默认 "987654321" 是合成示例，部署时替换为目标群号。
 group_id = "987654321"
+# Host 实际会话 ID，用于把控制请求定位到对应会话；非空字符串。
+# 默认 "synthetic-test-stream" 是合成示例，须从 Host 的目标群会话核对真实值。
 stream_id = "synthetic-test-stream"
+# 本地 Owner 授权名单，用于识别最高管理角色；QQ 字符串数组，默认 []，即不授权 Owner。
+# 例：["123456780"]；每项为 5–20 位非零开头数字，不能与 Bot 或其他角色重复。
 owner_accounts = []
+# 本地 Admin 授权名单，为指定成员提供管理角色；QQ 字符串数组，默认 []，即不授权 Admin。
+# 填写实际管理员 QQ（5–20 位非零开头数字），不能与 Owner、其他机器人或 Bot 重复。
 admin_accounts = []
+# 其他机器人账号名单，用于识别机器人消息，不授予管理权限；QQ 字符串数组，默认 []。
+# 群内有其他机器人时填其 QQ（5–20 位非零开头数字），不能与管理角色或本 Bot 重复。
 other_bot_accounts = []
 
+# 软静默预算与时长，须满足下方跨字段约束。
 [soft]
+# 软静默处理开关，决定是否接受社交静默及自主克制；布尔值，默认 true。
+# 设为 false 可停止软状态管理，硬静音另由 hard 配置控制。
 enabled = true
+# 默认请求时长（秒）；整数 10–300，可选，默认 60。
+# 普通成员未指定时长时采用此值，避免请求无限持续。
 default_seconds = 60
+# 管理级软请求默认时长（秒）；整数 10–600，可选，默认 120。
+# 管理角色未指定时长时采用此值，便于较长时间整理群聊。
 privileged_default_seconds = 120
+# 单次时长上限（秒）；整数 10–300，可选，默认 300。
+# 限制普通成员一次请求，防止单次占用过久。
 max_seconds = 300
+# 管理级软请求时长上限（秒）；整数 10–600，可选，默认 600。
+# 限制管理角色一次请求，保留管理空间同时限制静默长度。
 privileged_max_seconds = 600
+# 连续软静默总时长上限（秒）；整数 10–600，可选，默认 600。
+# 限制连续续期的总长度，防止多次请求无限延长。
 episode_max_seconds = 600
+# 群滚动小时软静默预算（秒）；整数 10–900，可选，默认 900。
+# 约束全群累计静默时间，避免频繁请求让群长期无回应。
 group_hour_budget_seconds = 900
+# 普通请求者滚动小时预算（秒）；整数 10–300，可选，默认 300。
+# 限制单个普通成员累计使用量，防止独占静默额度。
 requester_hour_budget_seconds = 300
+# 管理级请求者滚动小时预算（秒）；整数 10–600，可选，默认 600。
+# 给管理角色单独的累计额度，控制其反复请求的影响。
 privileged_requester_hour_budget_seconds = 600
+# 同请求者软请求冷却（秒）；整数 10–600，可选，默认 60。
+# 同一请求者需等待后再发起候选，减少重复触发。
 requester_cooldown_seconds = 60
+# 群候选冷却（秒）；整数 1–60，可选，默认 10。
+# 限制群内候选产生频率，避免多人同时请求造成裁判拥塞。
 group_candidate_cooldown_seconds = 10
+# 软静默最短停留（秒）；整数 10–60，可选，默认 10。
+# 进入软静默后至少停留此时长，防止状态快速来回切换。
 min_dwell_seconds = 10
 
+# 克制状态下的发送间隔及预算。
 [restraint]
+# 发送最小间隔（秒）；整数 10–120，可选，默认 30。
+# 降低克制状态下的发言频率，仍允许间隔发送。
 min_send_interval_seconds = 30
+# 单次时长上限（秒）；整数 10–300，可选，默认 120。
+# 限制一次克制状态的长度，避免长期降频。
 max_seconds = 120
+# 滚动小时克制预算（秒）；整数 10–600，可选，默认 600。
+# 限制群内累计克制时间，防止反复进入降频。
 hour_budget_seconds = 600
 
+# 恢复期的发送间隔与邀请冷却。
 [recovery]
+# 持续时长（秒）；整数 60–300，可选，默认 60。
+# 设置恢复过渡期长度，让发言逐步恢复。
 duration_seconds = 60
+# 发送最小间隔（秒）；整数 10–300，可选，默认 60。
+# 约束恢复期的发送频率，避免刚恢复就密集发言。
 min_send_interval_seconds = 60
+# 邀请恢复冷却（秒）；整数 60–300，可选，默认 60。
+# 为邀请恢复及再次静默设置等待窗口，减少反复切换。
 invitation_cooldown_seconds = 60
 
+# 管理员硬静音时长。
 [hard]
+# 默认请求时长（秒）；整数 1–86400，可选，默认 1200。
+# 管理员未指定时长时采用此值，确保硬静音有明确期限。
 default_seconds = 1200
+# 单次时长上限（秒）；整数 1–86400，可选，默认 86400。
+# 限定管理员单次硬静音长度，防止误设过长。
 max_seconds = 86400
 
-# Independent from decision.enabled; only confirmed sends can trigger RESTRAINED.
+# 可选无模型自主克制，独立于 decision 开关。
 [autonomous]
+# 无模型自主克制开关，用于机器人连续发言时主动降频；布尔值，默认 false。
+# 开启还需 soft.enabled=true，不依赖 decision.enabled。
 enabled = false
+# 成功发送统计窗口（秒）；整数 30–300，可选，默认 120。
+# 只统计近期成功发送，避免旧消息触发降频。
 window_seconds = 120
+# 触发所需连续成功发送次数；整数 4–32，可选，默认 8。
+# 达到连续发送门槛才考虑克制，避免偶发回复触发。
 min_successful_sends = 8
+# 连续发送允许的最大间隔（秒）；整数 1–60，可选，默认 20。
+# 超过此间隔不再视为连续发言，区分连发与零散回复。
 max_gap_seconds = 20
+# 观察到的机器人消息最低占比（百分数）；整数 50–100，可选，默认 70。
+# 仅在机器人发言占比高时触发，减少正常人机交流中的降频。
 min_bot_share_percent = 70
+# 持续时长（秒）；整数 10–120，可选，默认 60。
+# 决定自动降频持续多久，必须不超过自身小时预算和 restraint.max_seconds。
 duration_seconds = 60
+# 自主克制触发冷却（秒）；整数 300–3600，可选，默认 600。
+# 两次自主触发之间留出观察时间，避免连续触发。
 cooldown_seconds = 600
+# 滚动小时克制预算（秒）；整数 10–300，可选，默认 180。
+# 限制自主降频累计占用时间，避免整小时都处于克制。
 hour_budget_seconds = 180
 
+# 可选模型社交裁判；默认关闭，开启后产生模型费用。
 [decision]
+# 模型社交裁判开关，用于判断静默或恢复候选；布尔值，默认 false。
+# 开启会产生模型调用，必须填写 Host 已有的 task_name。
 enabled = false
+# Host 已有模型任务名，用于复用 Host 的模型路由；字符串，默认 ""。
+# 关闭裁判时可留空，开启时必须填写非空白且实际存在的任务名。
 task_name = ""
+# 保留的具体模型覆盖字段，当前不支持覆盖 Host 任务选择；仅允许空字符串，默认 ""。
 model_name = ""
+# 模型调用超时（秒）；整数 1–10，可选，默认 8。
+# 限制等待模型的时间，避免慢请求长期占用并发槽位。
 timeout_seconds = 8
+# 候选有效期（秒），须大于调用超时；整数 2–30，可选，默认 15。
+# 过期候选不再执行，避免按陈旧语境改变状态；必须大于 timeout_seconds。
 candidate_ttl_seconds = 15
+# 最多纳入的上下文消息数；整数 1–20，可选，默认 12。
+# 限制提交给裁判的消息条数，控制上下文规模。
 max_context_messages = 12
+# 上下文最大字节数；整数 512–8192，可选，默认 4096。
+# 限制上下文体积，防止少量超长消息耗尽预算。
 max_context_bytes = 4096
+# 每群滚动小时模型调用上限；整数 1–60，可选，默认 12。
+# 限制单群模型消耗，防止活跃群反复触发调用。
 max_calls_per_group_hour = 12
+# 实例滚动小时模型调用上限；整数 1–300，可选，默认 60。
+# 约束整个实例的模型消耗，为多群共享调用设置总上限。
 max_calls_per_instance_hour = 60
+# 同时进行的模型调用上限；整数 1–2，可选，默认 2。
+# 控制同时在途请求数，避免模型服务瞬时负载过高。
 max_concurrent = 2
+# 待处理候选队列容量；整数 1–64，可选，默认 64。
+# 限制等待处理的候选数量，防止请求积压占用内存。
 queue_capacity = 64
+# 单次模型输出 token 上限；整数 128–512，可选，默认 256。
+# 限制裁判输出长度，控制单次生成成本。
 max_output_tokens = 256
 
+# 审计与请求记录保留策略。
 [storage]
+# 审计保留天数；整数 1–30，可选，默认 7。
+# 保留近期审计以便排查控制来源，过期记录可清理。
 audit_retention_days = 7
+# 请求记录保留小时数；整数 24–168，可选，默认 24。
+# 保留近期请求记录供追踪处理结果，避免记录无限增长。
 request_retention_hours = 24
 
+# 控制回执边界。
 [control]
+# 控制成功回执开关，当前仅允许 false；布尔值，可选，默认 false。
+# 当前不支持成功控制回执，保持关闭以免静默期间额外发言。
 acknowledgements_enabled = false
 
+# 当前不可启用的跨插件能力。
 [integrations]
+# 跨插件特权委托，当前仅允许 false；布尔值，可选，默认 false。
+# 尚未开放跨插件授权，不能依赖 MaiIdentity 委托管理权。
 identity_h03_enabled = false
+# 按插件归属调频，当前仅允许 false；布尔值，可选，默认 false。
+# 尚不支持按插件归属降频，不能据此设置差异化发送策略。
 frequency_h02_enabled = false
+# 静默回执例外，当前仅允许 false；布尔值，可选，默认 false。
+# 尚未开放静默回执例外，不能让回执绕过静默约束。
 receipt_h01_enabled = false
+
+# 跨字段约束：soft.min_dwell_seconds ≤ default_seconds ≤ max_seconds ≤ privileged_max_seconds
+# ≤ episode_max_seconds ≤ group_hour_budget_seconds；privileged_default_seconds ≤ privileged_max_seconds。
+# 普通/管理级 requester_hour_budget_seconds 分别不得小于对应 max_seconds。
+# hard.default_seconds ≤ hard.max_seconds；autonomous.duration_seconds 不超过其小时预算及 restraint.max_seconds。
+# 同一路由身份或 stream_id 不可重复；不支持在线改绑已有路由。
