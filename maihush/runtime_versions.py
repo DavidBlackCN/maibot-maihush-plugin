@@ -2,7 +2,7 @@
 import importlib.metadata
 import os
 
-SUPPORTED_PAIRS = (("1.3.12", "2.15.0"), ("1.3.15", "2.16.0"))
+SUPPORTED_PAIRS = (("1.3.12", "2.15.0"), ("1.3.15", "2.16.0"), ("1.3.18", "2.19.0"))
 
 
 def runtime_pair():

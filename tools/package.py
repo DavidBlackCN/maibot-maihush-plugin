@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-FIXED=('plugin.py','_manifest.json','README.md','LICENSE','requirements.txt','config.example.toml','_locales/zh-CN.json')
+FIXED=('plugin.py','_manifest.json','README.md','UPDATE_NOTES.md','LICENSE','requirements.txt','config.example.toml','_locales/zh-CN.json')
 
 
 def allowed():
@@ -20,8 +20,8 @@ def allowed():
 def verify_source():
     manifest=json.loads((ROOT/'_manifest.json').read_text(encoding='utf8'))
     assert manifest['capabilities']==['send.text','message.get_by_id','llm.generate','llm.get_available_models']
-    assert manifest['host_application']=={'min_version':'1.3.12','max_version':'1.3.15'}
-    assert manifest['sdk']=={'min_version':'2.15.0','max_version':'2.16.0'}
+    assert manifest['host_application']=={'min_version':'1.3.12','max_version':'1.3.18'}
+    assert manifest['sdk']=={'min_version':'2.15.0','max_version':'2.19.0'}
     for name in allowed():
         p=ROOT/name
         assert p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(ROOT),name
@@ -40,7 +40,7 @@ def verify_source():
         for name in result.stdout.decode().split('\0'):
             if not name: continue
             path=Path(name)
-            assert not (path.suffix=='.md' and name!='README.md'),name
+            assert not (path.suffix=='.md' and name not in ('README.md','UPDATE_NOTES.md')),name
             assert name!='config.toml' and not any(x in path.parts for x in ('.integration','.venv','evidence','docs')),name
             assert path.suffix not in ('.db','.sqlite3','.wal','.pyc','.zip'),name
             assert not path.name.startswith('MaiHush_'),name
