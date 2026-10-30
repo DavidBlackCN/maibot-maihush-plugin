@@ -158,13 +158,7 @@ request_retention_hours = 24
 
 `[control] acknowledgements_enabled` 和 `[integrations]` 的 H01/H02/H03 开关只能为 false。没有静音回执豁免、全局频率覆盖或通用跨插件授权。
 
-## 自 v0.2.0 以来的修改
-
-- v0.2.2：新增有限中文命令，保持真实作者核对和本地权限规则。
-- v0.2.1：空 scope 精确匹配、公开路由绑定查询、受管理发送排队上限与配置切换保护。
-- v0.2.0：自然语言软约束、邀请恢复和无模型自主克制。
-
-完整变更见 [UPDATE_NOTES.md](UPDATE_NOTES.md)。
+版本变化见 [UPDATE_NOTES.md](UPDATE_NOTES.md)。
 
 ## 已知限制
 

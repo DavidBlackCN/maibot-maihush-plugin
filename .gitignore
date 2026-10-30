@@ -14,3 +14,16 @@ dist/
 *.sqlite-*
 *.wal
 *.shm
+
+# Only user-facing reference documents belong in this repository.
+/docs/*
+
+# Generated reports, local records and caches are never release sources.
+/evidence/
+/reports/
+/logs/
+/handoff/
+*.log
+*.tmp
+.mypy_cache/
+.ruff_cache/
