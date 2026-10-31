@@ -1,2 +1,0 @@
-# Runtime accepts only the explicit pairs in maihush/runtime_versions.py.
-maibot-plugin-sdk>=2.15.0,<=2.19.0

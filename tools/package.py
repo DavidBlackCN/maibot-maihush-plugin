@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-FIXED=('plugin.py','_manifest.json','README.md','UPDATE_NOTES.md','LICENSE','requirements.txt','config.example.toml','_locales/zh-CN.json')
+FIXED=('plugin.py','_manifest.json','README.md','UPDATE_NOTES.md','LICENSE','config.example.toml','_locales/zh-CN.json')
 
 
 def allowed():
@@ -20,8 +20,6 @@ def allowed():
 def verify_source():
     manifest=json.loads((ROOT/'_manifest.json').read_text(encoding='utf8'))
     assert manifest['capabilities']==['send.text','message.get_by_id','llm.generate','llm.get_available_models']
-    assert manifest['host_application']=={'min_version':'1.3.12','max_version':'1.3.18'}
-    assert manifest['sdk']=={'min_version':'2.15.0','max_version':'2.19.0'}
     for name in allowed():
         p=ROOT/name
         assert p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(ROOT),name

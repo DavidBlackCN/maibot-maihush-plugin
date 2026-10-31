@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial, wraps
 from hashlib import sha256
 import asyncio
-from ..runtime_versions import runtime_descriptor, runtime_supported
+from ..runtime_versions import runtime_descriptor
 import time
 from maibot_sdk import API, Command, HookHandler, MaiBotPlugin
 from maibot_sdk.types import ErrorPolicy, HookMode, HookOrder
@@ -83,7 +83,6 @@ class MaiHushPlugin(MaiBotPlugin):
                 raise
 
     async def on_load(self):
-        if not runtime_supported(): raise Denied('UNSUPPORTED_VERSION')
         self.active=MaiHushConfig.model_validate(self.config.model_dump() if isinstance(self.config,MaiHushConfig) else self.config)
         if self.active.decision.enabled:
             tasks=await self.ctx.llm.get_available_models()

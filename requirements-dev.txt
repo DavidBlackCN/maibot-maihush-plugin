@@ -1,5 +1,6 @@
--r requirements.txt
+# Development and unit tests only. Runtime compatibility is declared in _manifest.json.
+maibot-plugin-sdk==2.19.0
+pydantic==2.14.1
 pytest==9.1.1
+pytest-asyncio==1.4.0
 tomli-w==1.2.0
-
-# CI selects an exact supported SDK version alongside this requirements file.
