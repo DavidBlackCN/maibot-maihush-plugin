@@ -8,7 +8,7 @@ from maihush.application.service import Service, actor_ref
 from maihush.domain.models import Denied, State
 from maihush.decision.candidates import classify
 from maihush.decision.worker import Worker
-from maihush.host.config import MaiHushConfig
+from maihush.host.config import RuntimeConfig as MaiHushConfig
 from maihush.host.messages import route_for
 from tests.helpers import Clock, config, ev, message, apply, verdict
 from tests.test_worker import start
@@ -21,14 +21,13 @@ def store(tmp_path):
     yield s,clock,cfg
     s.close()
 
-@pytest.mark.parametrize('actor,expected',[('10003','RESTRAINED'),('10001','SOFT_SILENT'),('10002','SOFT_SILENT')])
-def test_local_role_changes_policy_for_identical_model_result(store,actor,expected):
+@pytest.mark.parametrize('actor,expected',[('10003','SOFT_SILENT'),('10001','SOFT_SILENT'),('10002','SOFT_SILENT')])
+def test_natural_requests_have_same_policy_for_all_roles(store,actor,expected):
     s,c,cfg=store; e=ev(cfg,actor=actor)
     t=s.admit(e,participation={'bot_sent_last_120_seconds':0})
     s.start_call(e,t); s.decide(e,t,verdict())
     state=s.state(STREAM); assert state.soft==expected and state.hard=='NONE'
-    assert state.soft_origin['actor_ref']==actor_ref(actor)
-    assert state.soft_origin['role']==cfg.route(STREAM).role(actor)
+    assert state.soft_origin['source']=='social'
 
 @pytest.mark.parametrize('actor',['10003','10001','10002'])
 def test_weak_feedback_never_escalates_to_silence(store,actor):
@@ -37,9 +36,9 @@ def test_weak_feedback_never_escalates_to_silence(store,actor):
     assert s.state(STREAM).soft=='RESTRAINED'
 
 @pytest.mark.parametrize('requester,inviter,wait,allowed',[
-    ('10003','10003',10,True),('10003','10004',10,False),('10003','10004',30,True),
-    ('10003','10001',10,True),('10001','10003',30,False),('10001','10002',30,False),
-    ('10001','10001',10,True),('10002','10001',30,False)])
+    ('10003','10003',10,True),('10003','10004',10,True),('10003','10004',30,True),
+    ('10003','10001',10,True),('10001','10003',30,True),('10001','10002',30,True),
+    ('10001','10001',10,True),('10002','10001',30,True)])
 def test_recovery_source_conflict_matrix(store,requester,inviter,wait,allowed):
     s,c,cfg=store; apply(s,ev(cfg,actor=requester),120); c.advance(wait)
     if allowed:
@@ -51,27 +50,23 @@ def test_recovery_source_conflict_matrix(store,requester,inviter,wait,allowed):
         with pytest.raises(Denied): apply(s,ev(cfg,actor=inviter,mid='invite'),0,'recover')
         assert s.state(STREAM).soft=='SOFT_SILENT'
 
-def test_multiple_management_claims_cannot_cancel_each_other(store):
+def test_natural_requests_do_not_create_management_claims(store):
     s,c,cfg=store; apply(s,ev(cfg,actor='10001'),120); c.advance(10)
-    apply(s,ev(cfg,actor='10002',mid='owner'),100)
-    assert len(s.state(STREAM).soft_claims)==2
-    with pytest.raises(Denied,match='ACTIVE_MANAGEMENT'): apply(s,ev(cfg,actor='10001',mid='invite'),0,'recover')
-    with pytest.raises(Denied,match='HIGHER_PRIORITY'): apply(s,ev(cfg,actor='10003',mid='extend'),300)
+    apply(s,ev(cfg,actor='10002',mid='another'),100)
+    apply(s,ev(cfg,actor='10003',mid='invite'),0,'recover')
+    assert s.state(STREAM).soft=='RECOVERING'
+    s.command(ev(cfg,actor='10001',mid='hard'),'mute',120)
+    with pytest.raises(Denied): apply(s,ev(cfg,actor='10003',mid='not-admin'),0,'recover')
+    assert s.state(STREAM).hard=='HARD_SILENT'
 
-def test_source_persists_and_old_json_deadline_is_preserved(tmp_path):
+
+def test_source_and_deadline_persist(tmp_path):
     c=Clock(); cfg=config(); s=Service(tmp_path,cfg,c.wall,c.mono)
     apply(s,ev(cfg,actor='10001'),120); origin=s.state(STREAM).soft_origin
     s.close(); c.advance(20); s=Service(tmp_path,cfg,c.wall,c.mono)
     assert s.state(STREAM).soft_origin==origin and s.state(STREAM).soft_until==100120
-    # R0.1 JSON without new fields is readable, without deleting the DB.
-    old=asdict(s.state(STREAM))
-    for key in ('soft_origin','soft_claims','auto_after'): del old[key]
-    with s.db.transaction(): s.db.conn.execute('UPDATE stream_state SET payload=? WHERE stream=?',(json.dumps(old),STREAM))
-    s.close(); c.advance(20); s=Service(tmp_path,cfg,c.wall,c.mono)
-    assert s.state(STREAM).soft_until==100120
-    with pytest.raises(Denied,match='LEGACY_SOURCE'): apply(s,ev(cfg,actor='10001',mid='invite'),0,'recover')
-    c.advance(100); assert s.state(STREAM).soft=='RECOVERING'
     s.close()
+
 
 def test_short_recovery_does_not_reset_episode(store):
     s,c,cfg=store; apply(s,ev(cfg),300); deadline=s.state(STREAM).episode_deadline
@@ -161,10 +156,16 @@ def test_auto_only_success_dedup_scope_and_no_model_when_disabled(tmp_path):
             for _ in range(8): await p.after_send(message=message(mid='duplicate'),sent=True)
             assert len(p.sent[STREAM])==1
             assert (await p.io(p.service.state,STREAM)).soft=='NORMAL'
-            for i in range(3): await p.after_send(message=message(mid=f'ok-{i}'),sent=True)
+            now=__import__('time').monotonic()
+            with patch('maihush.host.plugin.time.monotonic',side_effect=lambda:now):
+                for i in range(3):
+                    now+=4
+                    await p.after_send(message=message(mid=f'ok-{i}'),sent=True)
             state=await p.io(p.service.state,STREAM)
-            assert state.soft=='RESTRAINED' and state.soft_origin['source']=='autonomous' and not state.soft_claims
+            assert state.soft=='RESTRAINED' and state.soft_origin['source']=='autonomous'
             assert state.soft_until-state.dwell_start<=60 and state.hard=='NONE'
+            # Finite fragments of the final accepted burst may finish.
+            await p.io(lambda:setattr(p.service.snapshots[STREAM],'last_allowed',p.service.now()-4))
             assert (await p.before_send(message=message()))['action']=='abort'
             assert not model.calls
             assert await p.io(lambda:p.service.db.conn.execute('SELECT COUNT(*) FROM message_evidence').fetchone()[0])==0

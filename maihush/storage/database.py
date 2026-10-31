@@ -30,7 +30,7 @@ class Database:
             self.conn.execute('PRAGMA busy_timeout=100')
             version=self.conn.execute('PRAGMA user_version').fetchone()[0]
             tables=self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            if version not in (0,1) or (version==0 and tables): raise Denied('UNKNOWN_SCHEMA')
+            if version not in (0,2) or (version==0 and tables): raise Denied('UNKNOWN_SCHEMA')
             self.conn.execute('PRAGMA journal_mode=WAL'); self.conn.execute('PRAGMA synchronous=FULL')
             if version==0:
                 self.conn.executescript("""
@@ -41,12 +41,11 @@ class Database:
                 CREATE TABLE message_evidence(stream TEXT, mid TEXT, fingerprint TEXT, conflict INTEGER DEFAULT 0, at REAL, PRIMARY KEY(stream,mid));
                 CREATE TABLE intervals(stream TEXT, kind TEXT, start REAL, end REAL, actor TEXT, mid TEXT, CHECK(end>=start));
                 CREATE INDEX intervals_window ON intervals(stream,kind,end);
-                CREATE TABLE model_calls(call_id TEXT PRIMARY KEY, stream TEXT, at REAL, status TEXT);
+                CREATE TABLE model_calls(call_id TEXT PRIMARY KEY, stream TEXT, at REAL);
                 CREATE INDEX model_calls_window ON model_calls(at,stream);
                 CREATE TABLE actor_cooldown(stream TEXT, actor TEXT, until REAL, PRIMARY KEY(stream,actor));
-                CREATE TABLE send_reservations(attempt TEXT PRIMARY KEY, stream TEXT, version INTEGER, at REAL, expires REAL);
                 CREATE TABLE audit_events(seq INTEGER PRIMARY KEY, at REAL, stream_hash TEXT, version INTEGER, code TEXT);
-                PRAGMA user_version=1;
+                PRAGMA user_version=2;
                 COMMIT;
                 """)
             if self.conn.execute('PRAGMA quick_check').fetchone()[0]!='ok': raise Denied('CORRUPT_STORAGE')

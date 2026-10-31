@@ -11,6 +11,7 @@ class Verdict(BaseModel):
     duration_seconds: int=Field(ge=0,le=2147483647)
     reason_code: Literal['NOT_TARGETED','QUOTED_OR_NEGATED','LOW_PARTICIPATION','OVERPARTICIPATION','RESPECT_REQUEST','REINVITED','UNCERTAIN']
     evidence_message_ids: list[str]=Field(max_length=3)
+    reply: str = Field('', max_length=80)
 
     @model_validator(mode='after')
     def consistent(self):

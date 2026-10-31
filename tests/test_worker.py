@@ -36,7 +36,21 @@ class Model:
 
 async def start(directory, cfg):
     model=Model(); p=MaiHushPlugin()
-    p.set_plugin_config(cfg.model_dump())
+    from maihush.host.config import MaiHushConfig as UserConfig
+    from unittest.mock import AsyncMock
+    p.set_plugin_config({})
+    settings=UserConfig(management={'source':'local','admin_accounts':['10001','10002']},reply={'enabled':False})
+    p.set_plugin_config(settings.model_dump())
+    p.build_runtime=AsyncMock(return_value=cfg)
+    original_update=p.on_config_update
+    async def update_runtime(scope,raw,version):
+        from maihush.host.config import RuntimeConfig
+        try: p.build_runtime.return_value=RuntimeConfig.model_validate(raw)
+        except ValueError:
+            await original_update(scope,raw,version)
+            return
+        await original_update(scope,settings.model_dump(),version)
+    p.on_config_update=update_runtime
     p._set_context(SimpleNamespace(paths=SimpleNamespace(data_dir=directory),llm=model,logger=logging.getLogger('test')))
     previous=os.environ.get('MAIBOT_HOST_VERSION'); os.environ['MAIBOT_HOST_VERSION']=previous or '1.3.12'
     try: await p.on_load()
@@ -94,7 +108,7 @@ def test_invalid_hot_reload_retains_active_and_inflight_revision_invalidates(tmp
         try:
             revision=p.service.revision
             await p.on_config_update('self',{'integrations':{'identity_h03_enabled':True}},'1')
-            assert p.service.revision==revision and not p.active.integrations.identity_h03_enabled
+            assert p.service.revision==revision and p.active==cfg
             e=ev(cfg); ticket=await p.io(p.service.admit,e,False)
             raw=cfg.model_dump(); raw['routes'][0]['admin_accounts']=[]
             await p.on_config_update('self',raw,'1')
@@ -126,10 +140,10 @@ os._exit(0)
     finally: s.close()
 
 
-def test_weighted_fair_queue_two_concurrent_context_bounds(tmp_path):
+def test_fifo_queue_two_concurrent_context_bounds(tmp_path):
     async def scenario():
         routes=[{'enabled':True,'stream_id':f'fair-{i}','group_id':str(90000000+i),
-                 'admin_accounts':['10001'],'owner_accounts':['10002']} for i in range(8)]
+                 'admin_accounts':['10001','10002']} for i in range(8)]
         cfg=config(routes=routes,decision={'enabled':True,'task_name':'synthetic-task','queue_capacity':8})
         p,model=await start(tmp_path,cfg)
         try:
@@ -155,11 +169,11 @@ def test_weighted_fair_queue_two_concurrent_context_bounds(tmp_path):
             assert len(model.calls)==8 and not p.worker.pending
             observed=[]
             for prompt,kwargs in model.calls:
-                data=json.loads(prompt[1]['content']); observed.append(data['role'])
+                data=json.loads(prompt[1]['content']); observed.append(data['request']['id'])
                 assert len(data['history'])+1<=12 and len(prompt[1]['content'].encode())<=4096
                 assert kwargs['task_name']=='synthetic-task' and kwargs['max_tokens']==256
                 assert 'account' not in prompt[1]['content'] and '10001' not in prompt[1]['content']
-            assert observed[:4]==['owner','admin','owner','member']
+            assert observed==[f'request-{i}' for i in range(8)]
             assert p.worker.counts['completed']==8
         finally: await p.on_unload()
     asyncio.run(scenario())

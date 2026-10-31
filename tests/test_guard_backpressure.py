@@ -3,6 +3,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from maihush.host.plugin import MaiHushPlugin
+from maihush.domain.models import State
 from tests.helpers import config, message
 
 
@@ -10,7 +11,7 @@ def test_busy_managed_queue_vetoes_without_io_and_unrelated_route_still_passes()
     async def scenario():
         plugin=MaiHushPlugin()
         plugin.active=config(); plugin.ready=True
-        plugin.service=SimpleNamespace(guard=object())
+        plugin.service=SimpleNamespace(guard=object(),peek=lambda _:State(soft='RESTRAINED'),revision=1)
         plugin.io=AsyncMock(return_value=True)
         await plugin.control_gate.acquire()
         try:
@@ -46,7 +47,7 @@ def test_cancelled_waiter_does_not_release_someone_elses_control_gate():
 def test_inflight_storage_admits_no_additional_waiters_and_cancel_releases_admission():
     async def scenario():
         plugin=MaiHushPlugin();plugin.active=config();plugin.ready=True
-        plugin.service=SimpleNamespace(guard=object())
+        plugin.service=SimpleNamespace(guard=object(),peek=lambda _:State(soft='RESTRAINED'),revision=1)
         entered=asyncio.Event();release=asyncio.Event()
         async def io(*args):
             entered.set();await release.wait();return True

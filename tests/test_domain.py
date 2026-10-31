@@ -8,7 +8,7 @@ import pytest
 from maihush.application.service import Service
 from maihush.domain.budget import union,subtract,window_peak,reserve_end
 from maihush.domain.models import Denied,duration,State
-from maihush.host.config import MaiHushConfig
+from maihush.host.config import RuntimeConfig as MaiHushConfig
 from maihush.host.messages import evidence,route_for
 from maihush.decision.schema import parse
 from tests.helpers import Clock,config,message,ev,apply,verdict
@@ -33,9 +33,10 @@ def test_strict_config(patch):
 def test_sdk_config_generation():
     from maihush.host.plugin import MaiHushPlugin
     import tomllib
-    p=MaiHushPlugin(); assert p.build_default_config()['routes']==[]; assert p.build_config_schema()['sections']
-    cfg=MaiHushConfig.model_validate(tomllib.loads((Path(__file__).parents[1]/'config.example.toml').read_text(encoding='utf8')))
-    assert not cfg.routes[0].enabled and not cfg.decision.enabled
+    p=MaiHushPlugin(); assert p.build_default_config()['groups']==[]; assert p.build_config_schema()['sections']
+    from maihush.host.config import MaiHushConfig as UserConfig
+    cfg=UserConfig.model_validate(tomllib.loads((Path(__file__).parents[1]/'config.example.toml').read_text(encoding='utf8')))
+    assert not cfg.groups and not cfg.social.enabled
 
 @pytest.mark.parametrize('field,value',[('stream_id','foreign'),('group_id','12345'),('platform','other'),('user_id','10002'),('text','/maihush unmute')])
 def test_envelope_cross_check(field,value):
@@ -80,7 +81,7 @@ def test_hard_authority_and_idempotence(setup):
     with pytest.raises(Denied): s.command(ev(cfg), 'mute',1200)
     e=ev(cfg,actor='10001',text='/maihush mute',mid='hard')
     result=s.command(e,'mute',1200); deadline=s.state(e.stream).hard_until
-    c.advance(50); assert s.command(e,'mute',1200)==result; assert s.state(e.stream).hard_until==deadline
+    c.advance(50); assert s.command(e,'mute',1200)=={**result,'replayed':True}; assert s.state(e.stream).hard_until==deadline
     with pytest.raises(Denied): apply(s,ev(cfg,mid='soft'),300)
     assert not s.guard(e.stream)
     with pytest.raises(Denied): s.command(ev(cfg,actor='10001',mid='short'),'mute',10)
@@ -171,7 +172,7 @@ def test_atomic_permits_no_after_send(tmp_path):
     with ThreadPoolExecutor(max_workers=1) as ex:
         s=ex.submit(Service,tmp_path,cfg,c.wall,c.mono).result()
         ex.submit(apply,s,ev(cfg),120,'restrain').result()
-        assert sum(f.result() for f in [ex.submit(s.guard,'synthetic-test-stream') for _ in range(100)])==1
+        assert sum(f.result() for f in [ex.submit(s.guard,'synthetic-test-stream') for _ in range(100)])==8
         c.advance(11); assert not ex.submit(s.guard,'synthetic-test-stream').result()
         c.advance(19); assert ex.submit(s.guard,'synthetic-test-stream').result()
         ex.submit(s.close).result()
@@ -188,7 +189,7 @@ def test_lease_corruption_schema(tmp_path):
     c=Clock(); cfg=config(); s=Service(tmp_path,cfg,c.wall,c.mono)
     with pytest.raises(Denied,match='WRITER_BUSY'): Service(tmp_path,cfg,c.wall,c.mono)
     s.close()
-    db=sqlite3.connect(tmp_path/'maihush.sqlite3'); db.execute('PRAGMA user_version=2'); db.close()
+    db=sqlite3.connect(tmp_path/'maihush.sqlite3'); db.execute('PRAGMA user_version=99'); db.close()
     with pytest.raises(Denied,match='UNKNOWN_SCHEMA'): Service(tmp_path,cfg,c.wall,c.mono)
     (tmp_path/'maihush.sqlite3').write_bytes(b'broken')
     with pytest.raises(sqlite3.DatabaseError): Service(tmp_path,cfg,c.wall,c.mono)

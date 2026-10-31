@@ -1,91 +1,84 @@
 # MaiHush
 
-控制 MaiBot 在指定 QQ 群中的发言：管理员可以定时静音，也可让机器人根据聊天情况少说几句。
+让 MaiBot 在指定 QQ 群里安静一会：管理员可以定时静音，也可以开启自然劝静，让麦麦理解“先安静一会”等请求。
 
-- **定时静音**：管理员用命令静音、续期或恢复聊天，最长 24 小时。
-- **自然语言劝静**：可选功能，通过模型理解“先安静一会儿”等请求。
-- **自动减少发言**：可选功能，在机器人连续发言过多时降低频率，不调用模型。
+当前版本 **0.3.0**。兼容范围见 [_manifest.json](_manifest.json)。
 
-当前版本 **0.2.3**。已验证 MaiBot／Plugin SDK 组合：**1.3.18／2.19.0**、**1.3.15／2.16.0**、**1.3.12／2.15.0**。
+## 安装与设置
 
-## 安装与配置
-
-1. 将插件放入 `MaiBot/plugins/maibot-maihush-plugin/`，目录内应直接包含 `plugin.py`、`_manifest.json` 和 `maihush/`。
-2. 启动 MaiBot，编辑生成的 `config.toml`，为需要管理的群添加一条 `[[routes]]` 配置。
-3. 填好群信息和管理员 QQ，启用该配置并重启 MaiBot。在目标群发送 `/maihush status` 检查状态。
-
-默认不管理任何群。下面是填写示例，**请替换账号和会话信息后再启用**：
+将插件放入 `MaiBot/plugins/maibot-maihush-plugin/` 后启动，在 WebUI 添加受管理群并设置管理员来源。也可编辑生成的 `config.toml` 后重载：
 
 ```toml
-[[routes]]
-enabled = false
-platform = "qq"
-adapter_namespace = "host-qq"
-bot_account_id = "123456789"
-route_scope = ""
+[[groups]]
 group_id = "987654321"
-stream_id = "填写Host中该群的实际会话ID"
-owner_accounts = ["123456780"]
-admin_accounts = []
-other_bot_accounts = []
+
+[management]
+source = "identity"
 ```
 
-- `bot_account_id` 填机器人 QQ，`group_id` 填群号。
-- `stream_id` 从 MaiBot 的目标群会话中核对，不能直接填群号。
-- `route_scope` 与适配器上报值一致；Host 未设置 scope 时留空。
-- `adapter_namespace` 填本地适配器标签。
-- `owner_accounts` 和 `admin_accounts` 填有权使用静音命令的 QQ，各名单不要重复，也不要填机器人自己。
+替换群号。默认不管理任何群；机器人账号和会话信息由 MaiBot 查询，不需要填写会话 ID。首次加入的群发送消息后，最多等待约 30 秒识别。同群有多个机器人账号时，额外填写 `bot_account_id`；适配器使用了 scope 时填写 `route_scope`。
 
-QQ 群管理员身份不会自动获得本插件权限；MaiIdentity 的管理员设置也不替代这里的名单。完整字段说明见 [配置示例](config.example.toml)。
+`identity` 使用 MaiIdentity 的管理员名单。独立使用本插件时，改用本地名单：
+
+```toml
+[management]
+source = "local"
+admin_accounts = ["123456789"]
+```
+
+QQ 群管理员身份、昵称和固定身份称呼都不会自动授予权限。权限查询失败时拒绝管理操作。
 
 ## 命令
 
-命令只作用于当前已配置的群。
+命令只作用于当前受管理群。
 
-| 命令 | 用途 |
+| 命令 | 作用 |
 | --- | --- |
 | `/maihush help` | 查看帮助 |
-| `/maihush status` | 查看当前状态 |
-| `/maihush mute 20m` | 管理员静音 20 分钟，省略时长也为 20 分钟 |
-| `/maihush renew 10m` | 管理员将静音期限至少延长到当前时刻的 10 分钟后 |
-| `/maihush unmute` | 管理员解除本插件的静音与发言限制 |
-| `/maihush diagnostics` | 管理员查看插件运行情况 |
+| `/maihush status` | 查看状态 |
+| `/maihush mute 20m` | 管理员静音，省略时长默认 20 分钟 |
+| `/maihush renew 10m` | 将期限至少延长到当前时刻的 10 分钟后 |
+| `/maihush unmute` | 管理员解除 Hush 的限制 |
+| `/maihush diagnostics` | 管理员查看运行情况 |
 
-也支持 `/maihush 安静5分钟`、`/maihush 续期5分钟`、`/maihush 恢复聊天`。英文命令的时长可用 `s`（秒）、`m`（分）、`h`（小时）；续期不会缩短已有期限。
+支持 `s` 秒、`m` 分钟、`h` 小时，最长 24 小时。也可用 `/maihush 安静5分钟`、`/maihush 续期5分钟`、`/maihush 恢复聊天`。
 
-静音操作成功后不会额外发送群提示，恢复后也不会补发之前的消息。
-
-## 可选功能
-
-**自然语言劝静**默认关闭。开启前先在 MaiBot 中配置模型任务，再填写该任务名：
+首次命令静音默认回应一句，可修改或关闭：
 
 ```toml
-[decision]
+[reply]
 enabled = true
-task_name = "填写已有模型任务名"
+mute_text = "好，我先安静 {duration}。"
 ```
 
-开启后会调用模型。普通成员也可请求机器人暂时安静，但自然语言请求不能解除管理员命令设置的静音。模型判断失败时不会新增静音。
+续期和自然到期不提醒，重启保留期限，恢复后不补发消息。确认回复失败不影响静音。
 
-**自动减少发言**默认关闭，开启不需要模型：
+## 自然劝静
+
+默认关闭。开启前在 MaiBot 中配置模型任务：
 
 ```toml
-[autonomous]
+[social]
 enabled = true
+task_name = "你的模型任务名"
+max_seconds = 300
 ```
 
-机器人在短时间内连续发言、且占群内消息比例较高时，会暂时放慢发言。时长、频率和调用额度可在配置示例中查看，初次使用保持默认即可。
+普通成员可明确对麦麦说“先安静一会”“少说两句”，也可邀请“可以回来聊了”。插件参考机器人名字和 @ 判断对象，再由模型决定是否接受。首次接受时可自然回应一句；明确要求不回复时直接安静。回应与判断使用同一次模型调用，不改变 MaiVita 的活动。
 
-## 常见问题
+自然请求不能解除管理员静音。每群每小时最多 12 次判断，实例最多 60 次；静音累计时间与重复请求也有上限。判断失败不新增静音。交由 Hush 处理的明确请求不会再交给核心生成另一条回复。
 
-**命令不生效？** 检查该群配置是否启用，机器人 QQ、群号、scope 和会话 ID 是否正确，发令账号是否在管理员名单中。新增受管理群后需要重启。
+`autonomous_enabled = true` 可开启实验性的自动减少发言，默认关闭。它按短时发送次数估计，合并紧邻的消息片段；并非精确的对话轮次统计，不需要模型。
 
-**看不到状态回复？** 状态回复同样受静音限制，请查看 MaiBot 日志。
+## 使用边界与排错
 
-**解除静音后仍不说话？** MaiVita 的睡眠独立生效，解除 Hush 静音不会唤醒 Vita，唤醒 Vita 也不会解除 Hush 静音。
+- **命令没生效**：核对群号、管理员来源；查看日志中是否提示会话未发现或多账号冲突。
+- **静音时看不到状态**：状态、帮助和错误回复仍受静音约束，状态也会写入 MaiBot 日志。其他插件可通过 `get_public_constraints` 查询已知会话的公开状态。
+- **解除后仍不说话**：Vita 睡眠独立生效。Hush 不负责唤醒，也不停止 QQ 空间活动；确认回应同样不能绕过睡眠限制。
+- 自然降频按发送间隔执行，允许有限的短消息连续发送；不会调节主程序模型调用频率，不保证节省模型费用。
+- 限制覆盖 MaiBot 正常发送流程。直接调用平台接口的插件、已经提交平台的消息不在控制范围；这不是 QQ 平台禁言。
+- 从配置移除一个群会解除对该群的管理；仅卸载插件不删除保存的期限，卸载期间不执行拦截。
 
-这是机器人自身的发送限制，不是 QQ 平台禁言。卸载插件后限制不再生效；绕过 MaiBot 正常发送流程的插件消息不在控制范围内，已经发出的消息也无法撤回。配置根级 `enabled = false` 会清除当前限制；仅卸载插件不会清除保存的期限。
-
-[版本变化](UPDATE_NOTES.md) · [项目仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)
+[完整配置示例](config.example.toml) · [版本变化](UPDATE_NOTES.md) · [项目仓库](https://github.com/DavidBlackCN/maibot-maihush-plugin)
 
 感谢 MaiBot、插件 SDK 及社区文档。许可证：[MIT](LICENSE)。

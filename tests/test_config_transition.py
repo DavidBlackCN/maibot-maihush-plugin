@@ -1,7 +1,7 @@
 """T0 event barriers expose config commit/publication interleavings, not IPC."""
 import asyncio
 import pytest
-from maihush.host.config import MaiHushConfig
+from maihush.host.config import RuntimeConfig as MaiHushConfig
 from tests.helpers import config, message, ev
 from tests.test_worker import start
 

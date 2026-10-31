@@ -16,7 +16,7 @@ def test_public_read_is_side_effect_free_private_and_route_bound(tmp_path):
             assert view['hard']=='HARD_SILENT' and view['send_permit'] is False
             assert '10001' not in str(view) and '10002' not in str(view)
         clock.advance(21)
-        assert service.public_summary('synthetic-test-stream')['soft']=='RECOVERING'
+        assert service.public_summary('synthetic-test-stream')['soft']=='NORMAL'
         assert before==list(service.db.conn.iterdump()) and snapshots==service.snapshots
         assert logical==(service.logical,service.last_wall,service.last_mono)
         with pytest.raises(Denied,match='ROUTE_UNAVAILABLE'): service.public_summary('other')

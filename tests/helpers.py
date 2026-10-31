@@ -1,5 +1,5 @@
 from dataclasses import replace
-from maihush.host.config import MaiHushConfig
+from maihush.host.config import RuntimeConfig as MaiHushConfig
 from maihush.host.messages import evidence
 from maihush.decision.schema import Verdict
 
@@ -10,7 +10,7 @@ class Clock:
     def advance(self,n): self.t+=n; self.m+=n
 
 def config(**changes):
-    raw={'routes':[{'enabled':True,'admin_accounts':['10001'],'owner_accounts':['10002']}], 'decision':{'enabled':True,'task_name':'synthetic-task'}}
+    raw={'routes':[{'enabled':True,'admin_accounts':['10001','10002']}], 'decision':{'enabled':True,'task_name':'synthetic-task'}}
     raw.update(changes)
     return MaiHushConfig.model_validate(raw)
 

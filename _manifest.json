@@ -1,9 +1,9 @@
 {
   "manifest_version": 2,
   "id": "davidblackcn.maibot-maihush-plugin",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "name": "MaiHush",
-  "description": "Bounded social quiet and deterministic local group silence.",
+  "description": "群聊静音、自然劝静与简短确认回应。",
   "author": {
     "name": "DavidBlackCN",
     "url": "https://github.com/DavidBlackCN"
@@ -26,7 +26,11 @@
     "send.text",
     "message.get_by_id",
     "llm.generate",
-    "llm.get_available_models"
+    "llm.get_available_models",
+    "send.custom",
+    "chat.get_all_streams",
+    "config.get",
+    "api.call"
   ],
   "i18n": {
     "default_locale": "zh-CN",

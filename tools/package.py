@@ -19,7 +19,7 @@ def allowed():
 
 def verify_source():
     manifest=json.loads((ROOT/'_manifest.json').read_text(encoding='utf8'))
-    assert manifest['capabilities']==['send.text','message.get_by_id','llm.generate','llm.get_available_models']
+    assert manifest['capabilities']==['send.text','message.get_by_id','llm.generate','llm.get_available_models','send.custom','chat.get_all_streams','config.get','api.call']
     for name in allowed():
         p=ROOT/name
         assert p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(ROOT),name

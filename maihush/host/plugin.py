@@ -12,6 +12,8 @@ from ..decision.candidates import classify
 from ..decision.worker import Worker
 from ..domain.models import Denied, duration
 from .config import MaiHushConfig
+from .receipts import Receipts, KEY, duration_text
+from .routes import resolve, persona
 from .messages import evidence, route_for
 
 def serialized(fn):
@@ -25,13 +27,23 @@ def serialized(fn):
                 configs=(self.active,self.transition_config)
                 if all(route_for(c,message,outbound=True) is None for c in configs if c is not None): return {'action':'continue'}
             except Denied: pass
+        if fn.__name__=='before_send' and self.ready and not self.control_gate.locked():
+            try:
+                route=route_for(self.active,message,outbound=True)
+                state=self.service.peek(route.stream_id) if route else None
+                marked=any(isinstance(x,dict) and x.get('type')=='dict' for x in message.get('raw_message',[]))
+                if state and state.hard=='NONE' and state.soft=='NORMAL' and not marked:
+                    return {'action':'continue'}
+            except Denied:
+                pass
         if fn.__name__=='before_send':
             # Admit at most one managed send into the async lock/SQLite path.
             # A burst must not create hundreds of timeout tasks and provoke
             # Host circuit-breaking, which skips registered guards afterwards.
-            if self.send_inflight:
+            stream=message.get('session_id') if isinstance(message,dict) else None
+            if stream in self.send_inflight:
                 return {'action':'abort','reason':'MAIHUSH_BUSY'}
-            self.send_inflight=True
+            self.send_inflight.add(stream)
             # Bound queueing below the Host's 1000ms Hook deadline. Returning
             # an explicit veto does not increment the Host circuit breaker.
             # No permit is reserved when this queue budget is exhausted.
@@ -45,7 +57,7 @@ def serialized(fn):
                 finally:
                     self.control_gate.release()
             finally:
-                self.send_inflight=False
+                self.send_inflight.discard(stream)
         async with self.control_gate:
             return await fn(self,*args,**kwargs)
     return guarded
@@ -59,7 +71,9 @@ class MaiHushPlugin(MaiBotPlugin):
         self.ready=False; self.futures=set(); self.maintenance=None
         self.history=defaultdict(lambda:deque(maxlen=20)); self.sent=defaultdict(lambda:deque(maxlen=256)); self.error_after={}
         self.control_gate=asyncio.Lock(); self.quiescing=False
-        self.send_inflight=False
+        self.send_inflight=set()
+        self.settings=MaiHushConfig(); self.receipts=Receipts(); self.persona={}
+        self.route_issues=[]; self.owned_tasks=set()
         self.transition_config=None
         self.config_tasks=set()
         self.seen=defaultdict(dict); self.inbound=defaultdict(lambda:deque(maxlen=256)); self.inbound_seen=defaultdict(dict)
@@ -83,26 +97,44 @@ class MaiHushPlugin(MaiBotPlugin):
                 raise
 
     async def on_load(self):
-        self.active=MaiHushConfig.model_validate(self.config.model_dump() if isinstance(self.config,MaiHushConfig) else self.config)
+        self.settings=MaiHushConfig.model_validate(self.config.model_dump() if isinstance(self.config,MaiHushConfig) else self.config)
+        self.active=await self.build_runtime(self.settings)
         if self.active.decision.enabled:
-            tasks=await self.ctx.llm.get_available_models()
+            tasks=await asyncio.wait_for(self.ctx.llm.get_available_models(),2)
             if self.active.decision.task_name not in tasks: raise Denied('MODEL_TASK_UNAVAILABLE')
         self.executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='maihush-store')
         try:
             self.service=await self.io(Service,self.ctx.paths.data_dir,self.active)
+            self.active=self.service.config
             self.worker=Worker(self); self.worker.start(); self.ready=True
             self.maintenance=asyncio.create_task(self.maintain())
         except BaseException:
             await self.on_unload(); raise
 
+    async def build_runtime(self,settings):
+        runtime,issues=await resolve(self.ctx,settings,self.active)
+        name,context=await persona(self.ctx)
+        if name: runtime=runtime.model_copy(update={'bot_names':[name]})
+        self.persona=context; self.route_issues=issues
+        for issue in issues: self.ctx.logger.info('MaiHush %s',issue)
+        return runtime
+
     async def maintain(self):
         while True:
             await asyncio.sleep(30)
-            try: await self.io(self.service.maintain)
+            try:
+                await self.io(self.service.maintain)
+                settings=self.settings
+                new=await self.build_runtime(settings)
+                if self.ready and self.settings is settings and new!=self.active:
+                    await self.apply_config(new,settings)
             except Exception as exc: self.ctx.logger.error('MaiHush maintenance: %s',type(exc).__name__)
 
     async def on_unload(self):
         self.ready=False
+        self.receipts.clear()
+        for task in tuple(self.owned_tasks): task.cancel()
+        if self.owned_tasks: await asyncio.gather(*tuple(self.owned_tasks),return_exceptions=True)
         if self.config_tasks: await asyncio.gather(*tuple(self.config_tasks),return_exceptions=True)
         if self.maintenance:
             self.maintenance.cancel(); await asyncio.gather(self.maintenance,return_exceptions=True); self.maintenance=None
@@ -119,22 +151,23 @@ class MaiHushPlugin(MaiBotPlugin):
     async def on_config_update(self,scope,config_data,version):
         if scope!='self' or not self.ready: return
         try:
-            new=MaiHushConfig.model_validate(config_data)
+            settings=MaiHushConfig.model_validate(config_data)
+            new=await self.build_runtime(settings)
             if new.decision.enabled:
-                if new.decision.task_name not in await self.ctx.llm.get_available_models(): raise Denied('MODEL_TASK_UNAVAILABLE')
+                if new.decision.task_name not in await asyncio.wait_for(self.ctx.llm.get_available_models(),2): raise Denied('MODEL_TASK_UNAVAILABLE')
         except Exception as exc:
             self.ctx.logger.error('MaiHush config rejected; old active configuration retained: %s',type(exc).__name__)
             return
         # RPC cancellation must not interrupt the commit/publish pair. The
         # owned task finishes under the gate and unload joins it as well.
-        task=asyncio.create_task(self.apply_config(new)); self.config_tasks.add(task)
+        task=asyncio.create_task(self.apply_config(new,settings)); self.config_tasks.add(task)
         task.add_done_callback(self.config_tasks.discard)
         try: await asyncio.shield(task)
         except asyncio.CancelledError:
             await asyncio.shield(task)
             raise
 
-    async def apply_config(self,new):
+    async def apply_config(self,new,settings=None):
         async with self.control_gate:
             if not self.ready: return
             self.quiescing=True
@@ -145,6 +178,8 @@ class MaiHushPlugin(MaiBotPlugin):
                 await self.worker.close()
                 await self.io(self.service.reconfigure,new)
                 self.active=new
+                if settings is not None: self.settings=settings
+                self.receipts.clear()
                 self.history.clear(); self.sent.clear(); self.seen.clear(); self.inbound.clear(); self.inbound_seen.clear()
             except Exception as exc:
                 self.ctx.logger.error('MaiHush config rejected; old active configuration retained: %s',type(exc).__name__)
@@ -169,11 +204,16 @@ class MaiHushPlugin(MaiBotPlugin):
             context=[{'same_actor_direct_exchange':True} for x in list(self.history[e.stream])[-2:]
                      if x.get('_actor_ref')==ref and x.get('_targeted') and now-x.get('_at',0)<=30
                      and self.sent[e.stream] and now-self.sent[e.stream][-1]<=30]
-            c=classify(e,route.bot_account_id,context)
+            c=classify(e,route.bot_account_id,context,self.active.bot_names)
             # Keep bounded public context, including structured provenance.
             self.history[e.stream].append({'id':e.mid,'text':e.text.encode()[:1024].decode(errors='ignore'),'sources':[s.get('type','unknown') for s in e.segments],
                                           '_actor_ref':ref,'_targeted':bool(c and c.safe),'_at':now})
-            if c: await self.worker.offer(e,c,context)
+            if c:
+                accepted=await self.worker.offer(e,c,context)
+                if accepted['accepted']:
+                    # This explicit control request belongs to Hush. Do not
+                    # start a second core reply while the referee is running.
+                    return {'action':'abort','reason':'MAIHUSH_SOCIAL_REQUEST'}
         except Denied: pass
         return {'action':'continue'}
 
@@ -185,6 +225,9 @@ class MaiHushPlugin(MaiBotPlugin):
             route=route_for(self.active,message,outbound=True)
             if route is None: return {'action':'continue'}
             if not self.ready: return {'action':'abort','reason':'MAIHUSH_STOPPING'}
+            state=self.service.peek(route.stream_id)
+            receipt=self.receipts.consume(message,state.version,self.service.revision)
+            if receipt is not None: return receipt
             allowed=await self.io(self.service.guard,route.stream_id)
             return {'action':'continue' if allowed else 'abort','reason':'MAIHUSH_POLICY'}
         except Denied as exc:
@@ -198,6 +241,9 @@ class MaiHushPlugin(MaiBotPlugin):
             if route:
                 now=time.monotonic(); mid=message.get('message_id')
                 if not isinstance(mid,str) or not 1<=len(mid)<=256 or not self.observe_once(self.seen[route.stream_id],mid,now): return {'action':'continue'}
+                # Adjacent fragments count as one burst, not separate turns.
+                last=self.sent[route.stream_id][-1] if self.sent[route.stream_id] else None
+                if last is not None and now-last<=3: return {'action':'continue'}
                 self.sent[route.stream_id].append(now)
                 a=self.active.autonomous
                 recent=[x for x in self.sent[route.stream_id] if now-x<=a.window_seconds]
@@ -215,44 +261,96 @@ class MaiHushPlugin(MaiBotPlugin):
         if mid in seen or len(seen)>=4096: return False
         seen[mid]=now; return True
 
-    @Command('maihush',pattern=r'^/maihush(?:\s[\s\S]*)?$',description='Current group MaiHush controls')
+    async def acknowledge(self,e,result,text):
+        if (not self.ready or not self.settings.reply.enabled or not result.get('ack')
+                or result.get('replayed') or not text.strip()): return
+        import re
+        if re.search(r'别回复|不要回复|不用回复|无需回复|直接安静|do not reply|don.t reply',e.text,re.I): return
+        # Brief single-line text only. This does not change Vita activities.
+        text=' '.join(text.split())[:120]
+        async with self.control_gate:
+            state=self.service.peek(e.stream)
+            if state.version!=result['version'] or not self.ready: return
+            token=self.receipts.issue(e.stream,state.version,self.service.revision,text)
+        try:
+            sent=await asyncio.wait_for(self.ctx.send.custom('dict',{KEY:token},e.stream,
+                return_details=True,typing=False,storage_message=True),5)
+            if not isinstance(sent,dict) or sent.get('sent') is not True:
+                self.ctx.logger.info('MaiHush 确认回复未送达，静音仍生效')
+        except Exception as exc:
+            self.ctx.logger.info('MaiHush 确认回复未送达或结果未知，静音仍生效：%s',type(exc).__name__)
+        finally:
+            self.receipts.pending.pop(token,None)
+
+    async def administrator(self,e):
+        if self.settings.management.source=='local':
+            return e.actor in self.settings.management.admin_accounts
+        route=self.active.route(e.stream)
+        active=self.active; settings=self.settings
+        try:
+            value=await asyncio.wait_for(self.ctx.api.call(
+                'davidblackcn.maibot-maiidentity-plugin.is_admin',version='1',
+                account_id=e.actor,bot_account_id=route.bot_account_id,
+                route_scope=route.route_scope or None,stream_id=e.stream),2)
+            return (self.ready and self.active is active and self.settings is settings
+                    and isinstance(value,dict) and value.get('is_admin') is True)
+        except Exception:
+            return False
+
+    @Command('maihush',pattern=r'^/maihush(?:\s[\s\S]*)?$',description='查看当前群状态，管理员静音或恢复聊天')
     async def command(self,**kwargs):
+        task=asyncio.current_task(); self.owned_tasks.add(task)
+        try: return await self.handle_command(**kwargs)
+        finally: self.owned_tasks.discard(task)
+
+    async def handle_command(self,**kwargs):
         stream=None
         try:
             if not self.ready: raise Denied('NOT_READY')
             e=evidence(self.active,kwargs.get('message'),kwargs); stream=e.stream
-            # Query is only a conflict check, never an actor authentication API.
-            exact=await self.ctx.message.get_by_id(e.mid,stream_id=e.stream)
-            if exact is not None:
-                check=evidence(self.active,exact)
-                if check.fingerprint!=e.fingerprint: raise Denied('SCOPE_MISMATCH')
+            exact=await asyncio.wait_for(self.ctx.message.get_by_id(e.mid,stream_id=e.stream),2)
+            if exact is not None and evidence(self.active,exact).fingerprint!=e.fingerprint:
+                raise Denied('SCOPE_MISMATCH')
             from .natural_commands import parts_for
             parts=parts_for(e.text)
             if any(not p or any(ord(c)<32 for c in p) for p in parts) or len(parts) not in (2,3): raise Denied('INVALID_COMMAND')
-            op=parts[1]; route=self.active.route(stream)
+            op=parts[1]
             if op in ('help','status') and len(parts)==2:
-                s=await self.io(self.service.state,stream)
-                text='/maihush help|status|mute [20m]|renew 10m|unmute|diagnostics' if op=='help' else f'MaiHush {s.hard}/{s.soft}; remaining={max(0,int(max(s.hard_until if s.hard=="HARD_SILENT" else 0,s.soft_until)-time.time()))}s'
+                view=await self.io(self.service.public_summary,stream)
+                text=('/maihush status 查看状态；mute 20m 静音；renew 10m 续期；unmute 恢复聊天'
+                      if op=='help' else f"当前群：{view['reason']}，剩余 {duration_text(view['remaining_seconds'])}。"
+                      +('自然劝静已开启。' if self.active.decision.enabled else '自然劝静未开启。'))
+                self.ctx.logger.info('MaiHush %s',text)
                 await self.ctx.send.text(text,stream); return True,None,2
-            if route.role(e.actor)=='member': raise Denied('PERMISSION_DENIED')
+            active=self.active; settings=self.settings
+            if not await self.administrator(e): raise Denied('PERMISSION_DENIED')
             if op=='diagnostics' and len(parts)==2:
-                await self.ctx.send.text(f'MaiHush 0.2.3 health={self.service.health}/{self.service.reason}; revision={self.service.revision}; semantic={self.active.decision.enabled}; autonomous={self.active.autonomous.enabled}; H01/H02/H03=false; queue={len(self.worker.pending)}; queue_rejection={self.worker.last_rejection}',stream)
-                return True,None,2
+                text=f"MaiHush：{'正常' if self.service.health=='READY' else '异常 '+self.service.reason}；已识别 {len(self.active.routes)} 个群；管理员来源：{self.settings.management.source}。"
+                self.ctx.logger.info('%s',text)
+                await self.ctx.send.text(text,stream); return True,None,2
             if op not in ('mute','renew','unmute') or op=='renew' and len(parts)!=3 or op=='unmute' and len(parts)!=2: raise Denied('INVALID_COMMAND')
             seconds=duration(parts[2],self.active.hard.max_seconds) if len(parts)==3 else self.active.hard.default_seconds
             async with self.control_gate:
+                if not self.ready or self.active is not active or self.settings is not settings: raise Denied('CONFIG_CHANGED')
                 e=evidence(self.active,kwargs.get('message'),kwargs)
-                await self.io(self.service.command,e,op,seconds)
+                result=await self.io(self.service.command,e,op,seconds,True)
+            self.ctx.logger.info('MaiHush 管理操作：%s；%s',op,result['code'])
+            await self.acknowledge(e,result,self.settings.reply.mute_text.format(duration=duration_text(seconds)))
             return True,None,2
         except Denied as exc:
+            messages={'PERMISSION_DENIED':'没有管理权限或权限服务不可用','INVALID_COMMAND':'命令格式不正确，请使用 /maihush help',
+                      'INVALID_DURATION':'时长格式不正确，最长 24 小时','NO_HARD_STATE':'当前没有管理员静音',
+                      'WOULD_SHORTEN':'已有静音更长，请先解除后重新设置','CONFIG_CHANGED':'配置已变更，请重新操作'}
+            text=messages.get(str(exc),'无法执行：'+str(exc))
+            self.ctx.logger.info('MaiHush %s',text)
             if stream and time.monotonic()>=self.error_after.get(stream,0):
                 self.error_after[stream]=time.monotonic()+30
-                await self.ctx.send.text('MaiHush: '+str(exc),stream)
+                await self.ctx.send.text('MaiHush：'+text,stream)
             return False,None,2
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.2.3',**runtime_descriptor(),'hard_control':'local_command_only','identity_h03':'disabled','frequency_h02':'unsupported','receipt_h01':'unsupported','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'requester_and_active_claims'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.3.0',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):

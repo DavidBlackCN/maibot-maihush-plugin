@@ -1,5 +1,5 @@
 import pytest
-from maihush.host.config import MaiHushConfig
+from maihush.host.config import RuntimeConfig as MaiHushConfig
 from maihush.host.messages import route_for
 from maihush.domain.models import Denied
 
