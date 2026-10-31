@@ -2,5 +2,4 @@
 pytest==9.1.1
 tomli-w==1.2.0
 
-# Original baseline; the Linux CI job explicitly installs 2.16.0.
-maibot-plugin-sdk==2.15.0
+# CI selects an exact supported SDK version alongside this requirements file.
