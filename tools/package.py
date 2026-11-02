@@ -8,7 +8,7 @@ import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-FIXED=('plugin.py','_manifest.json','README.md','UPDATE_NOTES.md','LICENSE','config.example.toml','_locales/zh-CN.json')
+FIXED=('plugin.py','_manifest.json','README.md','UPDATE_NOTES.md','LICENSE','config.example.toml','_locales/zh-CN.json','docs/API.md')
 
 
 def allowed():
@@ -38,8 +38,9 @@ def verify_source():
         for name in result.stdout.decode().split('\0'):
             if not name: continue
             path=Path(name)
-            assert not (path.suffix=='.md' and name not in ('README.md','UPDATE_NOTES.md')),name
-            assert name!='config.toml' and not any(x in path.parts for x in ('.integration','.venv','evidence','docs')),name
+            assert not (path.suffix=='.md' and name not in ('README.md','UPDATE_NOTES.md','docs/API.md')),name
+            assert 'docs' not in path.parts or name=='docs/API.md',name
+            assert name!='config.toml' and not any(x in path.parts for x in ('.integration','.venv','evidence')),name
             assert path.suffix not in ('.db','.sqlite3','.wal','.pyc','.zip'),name
             assert not path.name.startswith('MaiHush_'),name
 

@@ -17,6 +17,7 @@ dist/
 
 # Only user-facing reference documents belong in this repository.
 /docs/*
+!/docs/API.md
 
 # Generated reports, local records and caches are never release sources.
 /evidence/
