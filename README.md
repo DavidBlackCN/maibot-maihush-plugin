@@ -2,7 +2,7 @@
 
 让 MaiBot 在指定 QQ 群里安静一会：管理员可以定时静音，也可以开启自然劝静，让麦麦理解“先安静一会”等请求。
 
-当前版本 **0.3.0**。兼容范围见 [_manifest.json](_manifest.json)。
+当前版本 **0.3.0**，支持 MaiBot 1.3.19／Plugin SDK 2.20.0。完整兼容范围见 [_manifest.json](_manifest.json)。
 
 ## 安装与设置
 
