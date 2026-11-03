@@ -77,6 +77,7 @@ class MaiHushPlugin(MaiBotPlugin):
         self.transition_config=None
         self.config_tasks=set()
         self.seen=defaultdict(dict); self.inbound=defaultdict(lambda:deque(maxlen=256)); self.inbound_seen=defaultdict(dict)
+        self.control_actions={}; self.control_receipts={}
 
     def normalize_plugin_config(self,config_data):
         MaiHushConfig.model_validate(config_data or {})
@@ -133,6 +134,7 @@ class MaiHushPlugin(MaiBotPlugin):
     async def on_unload(self):
         self.ready=False
         self.receipts.clear()
+        self.control_receipts.clear()
         for task in tuple(self.owned_tasks): task.cancel()
         if self.owned_tasks: await asyncio.gather(*tuple(self.owned_tasks),return_exceptions=True)
         if self.config_tasks: await asyncio.gather(*tuple(self.config_tasks),return_exceptions=True)
@@ -227,11 +229,22 @@ class MaiHushPlugin(MaiBotPlugin):
             if not self.ready: return {'action':'abort','reason':'MAIHUSH_STOPPING'}
             state=self.service.peek(route.stream_id)
             receipt=self.receipts.consume(message,state.version,self.service.revision)
-            if receipt is not None: return receipt
+            from .behavior import control,remember_receipt
+            delegated=control(self).get('defer_send_guard')
+            if receipt is not None:
+                if delegated: remember_receipt(self,message,receipt,state)
+                return receipt
+            if delegated: return {'action':'continue'}
             allowed=await self.io(self.service.guard,route.stream_id)
             return {'action':'continue' if allowed else 'abort','reason':'MAIHUSH_POLICY'}
         except Denied as exc:
             return {'action':'abort','reason':str(exc)}
+
+    @API('evaluate_behavior',public=False,version='1')
+    @serialized
+    async def evaluate_behavior(self,**kwargs):
+        from .behavior import evaluate
+        return await evaluate(self)
 
     @HookHandler('send_service.after_send',name='maihush_statistics',mode=HookMode.OBSERVE,error_policy=ErrorPolicy.SKIP)
     @serialized
@@ -350,7 +363,7 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.3.0',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.3.1',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):
