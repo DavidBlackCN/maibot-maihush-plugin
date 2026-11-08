@@ -56,3 +56,5 @@ Hush 命令确认使用本实例内部的一次性凭据，不对外提供。第
 ## 其他接口
 
 `get_contract` 用于读取功能描述；`get_state` 不向任意调用方开放私有状态，返回 UNTRUSTED_CONTEXT。不要尝试通过增加调用参数绕过该边界。
+
+`get_contract` 的 `administrator_source` 为 `per_group`，`default_administrator_source` 表示全局默认来源；不能据此推定某个群的实际管理员。默认自动纳管全部 QQ 群，群级规则只覆盖权限，管理范围由 `scope` 决定。动态加入会话不改变已有会话的 `config_revision`；显式修改配置仍会更新该版本。

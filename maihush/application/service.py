@@ -22,19 +22,18 @@ class Service:
         self.wall=wall; self.mono=mono; self.health='READY'; self.reason='READY'
         self.snapshots={}
         try:
-            # Restore only saved verified bindings still explicitly selected.
-            # Missing Host discovery must not erase an existing mute deadline.
-            if config.configured_groups is not None:
-                from ..host.config import Route
+            # Restore verified identities using current selection and permissions.
+            if config.selection is not None:
+                from ..host.config import MaiHushConfig
+                from ..host.routes import bind
+                settings=MaiHushConfig.model_validate(config.selection)
                 saved=self.db.get('identity',[config.instance_id,[]])[1]
                 restored=[]
                 for binding in saved:
                     if any(r.stream_id==binding[5] for r in config.routes): continue
-                    if any(g['group_id']==binding[4] and g['route_scope']==binding[3]
-                           and (not g['bot_account_id'] or g['bot_account_id']==binding[2])
-                           for g in config.configured_groups):
-                        restored.append(Route(enabled=True,platform=binding[0],adapter_namespace=binding[1],
-                            bot_account_id=binding[2],route_scope=binding[3],group_id=binding[4],stream_id=binding[5]))
+                    if binding[0]=='qq' and settings.scope.includes(binding[4]):
+                        restored.append(bind(settings,platform=binding[0],account=binding[2],
+                            scope=binding[3],group=binding[4],stream=binding[5]))
                 config=config.model_copy(update={'routes':[*config.routes,*restored]})
                 self.config=config.model_copy(deep=True)
             self.snapshots={k:State(**json.loads(v)) for k,v in self.db.conn.execute('SELECT stream,payload FROM stream_state')}
@@ -312,6 +311,31 @@ class Service:
             s.burst_count=1
             if not persist: self.snapshots[stream]=replace(s)
         return True
+
+    def add_routes(self,new):
+        """Publish additions without invalidating existing decisions or budgets."""
+        old=self.config
+        if old.model_dump(exclude={'routes'}) != new.model_dump(exclude={'routes'}):
+            raise Denied('CONFIG_CHANGED')
+        if any(r not in new.routes for r in old.routes): raise Denied('CONFIG_CHANGED')
+        bindings=self.db.get('identity',[new.instance_id,[]])[1]
+        added=[r for r in new.routes if r not in old.routes]
+        for route in added:
+            binding=list(route.identity())
+            for previous in bindings:
+                if (previous[5]==binding[5] or (previous[0],previous[2],previous[3],previous[4])==
+                        (binding[0],binding[2],binding[3],binding[4])) and previous!=binding:
+                    raise Denied('RELOAD_REQUIRED')
+            if binding not in bindings: bindings.append(binding)
+        if self.health!='READY': raise Denied(self.reason)
+        states={r.stream_id:self.snapshots.get(r.stream_id,State()) for r in added}
+        try:
+            with self.db.transaction():
+                self.db.set('identity',[new.instance_id,bindings])
+                for stream,state in states.items(): self._save(stream,state)
+        except (sqlite3.Error,OSError):
+            self.health='DEGRADED'; self.reason='STORAGE_UNAVAILABLE'; raise Denied(self.reason)
+        self.config=new.model_copy(deep=True); self.snapshots.update(states)
 
     def reconfigure(self,new):
         old=self.config

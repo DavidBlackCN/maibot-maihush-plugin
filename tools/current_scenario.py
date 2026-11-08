@@ -18,7 +18,7 @@ async def run(work):
     stream=session.session_id
     cfg.bot.nickname='\u5c0f\u6843'
     configs={
-        'maibot-maihush-plugin':{'plugin':{'enabled':True,'config_version':'2'},'groups':[{'group_id':'987654321'}], 'management':{'source':'identity'}},
+        'maibot-maihush-plugin':{'plugin':{'enabled':True,'config_version':'2'}, 'management':{'source':'identity'}},
         'maibot-maiIdentity-plugin':{'plugin':{'enabled':True,'config_version':'4'},'management':{'admin_accounts':['10001']}}}
     for folder,config in configs.items():
         (work/'plugins'/folder/'config.toml').write_text(tomli_w.dumps(config),encoding='utf8')

@@ -16,11 +16,12 @@ from tests.helpers import message
 STREAM='synthetic-test-stream'
 
 
-async def start_public(directory, *, identity=False, social=False, reply=True):
+async def start_public(directory, *, identity=False, social=False, reply=True, scope=None):
     p=MaiHushPlugin()
     settings={'groups':[{'group_id':'987654321','route_scope':'synthetic-test-scope'}],
               'management':{'source':'identity' if identity else 'local','admin_accounts':['10001']},
               'social':{'enabled':social,'task_name':'test' if social else ''},'reply':{'enabled':reply}}
+    if scope is not None: settings['scope']=scope
     p.set_plugin_config(MaiHushConfig.model_validate(settings).model_dump())
     streams=[{'platform':'qq','is_group_session':True,'group_id':'987654321','account_id':'123456789',
               'scope':'synthetic-test-scope','stream_id':STREAM,'session_id':STREAM}]
@@ -157,17 +158,17 @@ def test_normal_sends_no_cross_group_veto_or_storage_writes(tmp_path):
     asyncio.run(scenario())
 
 
-def test_ambiguous_group_requires_bot_account():
+def test_multiple_accounts_are_separate_sessions_without_manual_selection():
     async def scenario():
         rows=[{'platform':'qq','is_group_session':True,'group_id':'987654321','account_id':a,
                'scope':None,'session_id':a,'stream_id':a} for a in ('123456789','234567890')]
         ctx=SimpleNamespace(chat=SimpleNamespace(get_all_streams=AsyncMock(return_value=rows)))
         cfg=MaiHushConfig(groups=[{'group_id':'987654321'}])
         runtime,issues=await resolve(ctx,cfg)
-        assert not runtime.routes and issues
+        assert len(runtime.routes)==2 and not issues
         cfg=MaiHushConfig(groups=[{'group_id':'987654321','bot_account_id':'123456789'}])
         runtime,issues=await resolve(ctx,cfg)
-        assert len(runtime.routes)==1 and not issues
+        assert len(runtime.routes)==2 and not issues
     asyncio.run(scenario())
 
 

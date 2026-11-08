@@ -35,7 +35,7 @@ async def run_cases(work,supervisor,manager,call,configs,stream,scope,driver,mod
     inspected=await supervisor.inspect_plugin_config(HUSH)
     assert not inspected.config_error and inspected.config_schema['sections']
     assert (await call(HUSH,'get_public_route_binding',{'stream_id':stream}))['data']['stream_id']==stream
-    cases.append('native_schema_and_group_only_discovery')
+    cases.append('native_schema_and_default_all_without_group_configuration')
     mid=uuid.uuid4().hex
     assert (await command('/maihush mute 5m',mid=mid))[0]
     assert (await state())['hard']=='HARD_SILENT'
@@ -62,6 +62,37 @@ async def run_cases(work,supervisor,manager,call,configs,stream,scope,driver,mod
     configs['maibot-maiIdentity-plugin']['management']['admin_accounts']=['10001']
     await reload('maibot-maiIdentity-plugin',IDENTITY)
     cases.append('identity_revocation_and_nickname_do_not_authorize')
+    configs['maibot-maihush-plugin']['groups']=[{'group_id':'987654321',
+        'management':{'source':'local','admin_accounts':['10003']}}]
+    await reload('maibot-maihush-plugin',HUSH)
+    await command('/maihush mute 5m','10001')
+    assert (await state())['hard']=='NONE'
+    assert (await command('/maihush mute 5m','10003'))[0]
+    assert (await state())['hard']=='HARD_SILENT'
+    from src.chat.message_receive.chat_manager import chat_manager
+    second=await chat_manager.get_or_create_session('qq','10001','888888888',account_id='123456789',scope=scope)
+    second_stream=second.session_id
+    m=raw('hello');m.session_id=second_stream
+    m.message_info.group_info=GroupInfo('888888888','second')
+    await manager.invoke_hook('chat.receive.after_process',message=serialize_session_message(m))
+    for _ in range(40):
+        binding=await call(HUSH,'get_public_route_binding',{'stream_id':second_stream})
+        if binding['ok']: break
+        await asyncio.sleep(.1)
+    assert binding['ok'],binding
+    assert (await state())['hard']=='HARD_SILENT'
+    assert (await call(HUSH,'get_public_constraints',{'stream_id':second_stream}))['data']['hard']=='NONE'
+    assert (await command('/maihush unmute','10003'))[0]
+    configs['maibot-maihush-plugin']['management']={'source':'local','admin_accounts':['10003']}
+    configs['maibot-maihush-plugin']['groups'][0]['management']={'source':'identity'}
+    await reload('maibot-maihush-plugin',HUSH)
+    await command('/maihush mute 5m','10003')
+    assert (await state())['hard']=='NONE'
+    assert (await command('/maihush mute 5m','10001'))[0]
+    assert (await command('/maihush unmute','10001'))[0]
+    configs['maibot-maihush-plugin']['management']={'source':'identity'}
+    configs['maibot-maihush-plugin']['groups']=[]
+    cases.append('native_per_group_authorization_and_incremental_discovery')
     configs['maibot-maihush-plugin']['social']={'enabled':True,'task_name':'joint-test'}
     await reload('maibot-maihush-plugin',HUSH)
     import sqlite3, json

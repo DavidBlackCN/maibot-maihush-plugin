@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "id": "davidblackcn.maibot-maihush-plugin",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "name": "MaiHush",
   "description": "群聊静音、自然劝静与简短确认回应。",
   "author": {

@@ -19,6 +19,8 @@ from .messages import evidence, route_for
 def serialized(fn):
     @wraps(fn)
     async def guarded(self,*args,**kwargs):
+        if fn.__name__ in ('before_send','receive'):
+            self.discover_for(kwargs.get('message',args[0] if args else None))
         if fn.__name__=='before_send' and self.active is not None:
             message=kwargs.get('message',args[0] if args else None)
             try:
@@ -76,6 +78,7 @@ class MaiHushPlugin(MaiBotPlugin):
         self.route_issues=[]; self.owned_tasks=set()
         self.transition_config=None
         self.config_tasks=set()
+        self.discovery_task=None; self.discovery_after=0
         self.seen=defaultdict(dict); self.inbound=defaultdict(lambda:deque(maxlen=256)); self.inbound_seen=defaultdict(dict)
         self.control_actions={}; self.control_receipts={}
 
@@ -125,11 +128,35 @@ class MaiHushPlugin(MaiBotPlugin):
             await asyncio.sleep(30)
             try:
                 await self.io(self.service.maintain)
-                settings=self.settings
-                new=await self.build_runtime(settings)
-                if self.ready and self.settings is settings and new!=self.active:
-                    await self.apply_config(new,settings)
+                await self.refresh_routes()
             except Exception as exc: self.ctx.logger.error('MaiHush maintenance: %s',type(exc).__name__)
+
+    def discover_for(self,message):
+        if not self.ready or not self.active.enabled or not isinstance(message,dict) or self.active.selection is None: return None
+        if self.discovery_task and not self.discovery_task.done(): return self.discovery_task
+        if self.active.route(message.get('session_id')) or message.get('platform')!='qq': return None
+        info=message.get('message_info')
+        group=info.get('group_info') if isinstance(info,dict) else None
+        if not isinstance(group,dict) or not self.settings.scope.includes(group.get('group_id')): return None
+        if time.monotonic()<self.discovery_after: return None
+        self.discovery_after=time.monotonic()+2
+        task=asyncio.create_task(self.refresh_routes()); self.discovery_task=task
+        self.owned_tasks.add(task); task.add_done_callback(self.owned_tasks.discard)
+        return task
+
+    async def refresh_routes(self):
+        settings,active=self.settings,self.active
+        try:
+            new,issues=await resolve(self.ctx,settings,active)
+            new=new.model_copy(update={'bot_names':active.bot_names})
+            async with self.control_gate:
+                if not self.ready or self.settings is not settings or self.active is not active: return
+                self.route_issues=issues
+                if new==active: return
+                await self.io(self.service.add_routes,new)
+                self.active=new
+        except Exception as exc:
+            self.ctx.logger.error('MaiHush 会话发现失败，保留已有约束：%s',type(exc).__name__)
 
     async def on_unload(self):
         self.ready=False
@@ -172,6 +199,16 @@ class MaiHushPlugin(MaiBotPlugin):
     async def apply_config(self,new,settings=None):
         async with self.control_gate:
             if not self.ready: return
+            # A discovery committed while configuration RPCs were in flight.
+            # Keep its verified bindings unless the new scope explicitly excludes them.
+            if settings is not None and new.selection is not None:
+                from .routes import bind
+                routes=list(new.routes)
+                for route in self.active.routes:
+                    if settings.scope.includes(route.group_id) and not any(r.stream_id==route.stream_id for r in routes):
+                        routes.append(bind(settings,platform=route.platform,account=route.bot_account_id,
+                            scope=route.route_scope,group=route.group_id,stream=route.stream_id))
+                new=type(new).model_validate({**new.model_dump(),'routes':[r.model_dump() for r in routes]})
             self.quiescing=True
             self.transition_config=new
             try:
@@ -296,9 +333,11 @@ class MaiHushPlugin(MaiBotPlugin):
             self.receipts.pending.pop(token,None)
 
     async def administrator(self,e):
-        if self.settings.management.source=='local':
-            return e.actor in self.settings.management.admin_accounts
         route=self.active.route(e.stream)
+        if route is None: return False
+        management=self.settings.management_for(route.group_id,route.bot_account_id,route.route_scope)
+        if management.source=='local':
+            return e.actor in management.admin_accounts and e.actor != route.bot_account_id
         active=self.active; settings=self.settings
         try:
             value=await asyncio.wait_for(self.ctx.api.call(
@@ -320,6 +359,8 @@ class MaiHushPlugin(MaiBotPlugin):
         stream=None
         try:
             if not self.ready: raise Denied('NOT_READY')
+            discovery=self.discover_for(kwargs.get('message'))
+            if discovery: await asyncio.shield(discovery)
             e=evidence(self.active,kwargs.get('message'),kwargs); stream=e.stream
             exact=await asyncio.wait_for(self.ctx.message.get_by_id(e.mid,stream_id=e.stream),2)
             if exact is not None and evidence(self.active,exact).fingerprint!=e.fingerprint:
@@ -338,7 +379,9 @@ class MaiHushPlugin(MaiBotPlugin):
             active=self.active; settings=self.settings
             if not await self.administrator(e): raise Denied('PERMISSION_DENIED')
             if op=='diagnostics' and len(parts)==2:
-                text=f"MaiHush：{'正常' if self.service.health=='READY' else '异常 '+self.service.reason}；已识别 {len(self.active.routes)} 个群；管理员来源：{self.settings.management.source}。"
+                route=self.active.route(e.stream)
+                management=self.settings.management_for(route.group_id,route.bot_account_id,route.route_scope)
+                text=f"MaiHush：{'正常' if self.service.health=='READY' else '异常 '+self.service.reason}；已识别 {len(self.active.routes)} 个群会话；当前群管理员来源：{management.source}。"
                 self.ctx.logger.info('%s',text)
                 await self.ctx.send.text(text,stream); return True,None,2
             if op not in ('mute','renew','unmute') or op=='renew' and len(parts)!=3 or op=='unmute' and len(parts)!=2: raise Denied('INVALID_COMMAND')
@@ -363,7 +406,7 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.1.0','plugin':'MaiHush','plugin_version':'0.3.2',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.2.0','plugin':'MaiHush','plugin_version':'0.4.0',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':'per_group','default_administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):

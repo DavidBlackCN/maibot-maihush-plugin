@@ -32,10 +32,11 @@ async def evaluate(plugin):
     stream = request.get('stream_id')
     route = plugin.active.route(stream)
     if route is None:
-        configured = plugin.active.configured_groups or []
-        if any(g['group_id'] == target.get('target_id') and target.get('chat_type') == 'group'
-               and (not g.get('bot_account_id') or g['bot_account_id'] == target.get('account_id'))
-               and (g.get('route_scope') or None) == target.get('scope') for g in configured):
+        from .config import MaiHushConfig
+        selection = plugin.active.selection
+        if (selection is not None and plugin.active.enabled and target.get('platform') == 'qq'
+                and target.get('chat_type') == 'group'
+                and MaiHushConfig.model_validate(selection).scope.includes(target.get('target_id'))):
             return {**result, 'reason': 'route_unavailable'}
         return {**result, 'decision': 'abstain', 'reason': 'not_managed'}
     if (target.get('platform'), target.get('account_id'), target.get('scope'), target.get('target_id')) != (

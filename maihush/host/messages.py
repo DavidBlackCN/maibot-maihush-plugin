@@ -23,6 +23,12 @@ def route_for(config, message, *, outbound=False):
     stream=message.get('session_id')
     route=config.route(stream) if isinstance(stream,str) else None
     if not route and isinstance(platform,str) and platform != 'qq': return None
+    if not route and config.enabled and config.selection is not None:
+        from .config import MaiHushConfig
+        info=message.get('message_info')
+        group=info.get('group_info') if isinstance(info,dict) else None
+        if isinstance(group,dict) and MaiHushConfig.model_validate(config.selection).scope.includes(group.get('group_id')):
+            raise Denied('ROUTE_UNAVAILABLE')
     # Positive exclusion precedes parsing fields irrelevant to this account.
     candidates=[r for r in config.routes if config.enabled and r.enabled]
     if not candidates: return None

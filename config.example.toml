@@ -6,11 +6,10 @@ autonomous_enabled = false
 enabled = true
 config_version = "2"
 
-# 默认不管理任何群。取消下面的注释，替换为自己的群号。
-# [[groups]]
-# group_id = "987654321"
-# bot_account_id = ""  # 通常留空；同群有多个机器人账号时填写
-# route_scope = ""     # 通常留空；适配器有 scope 时填写相同值
+[scope]
+mode = "all"          # 默认自动管理全部 QQ 群，不包含私聊
+group_ids = []        # mode = "allowlist" 时仅管理这些群；空名单不管理任何群
+excluded_groups = []  # 排除名单始终优先
 
 [management]
 # identity 使用 MaiIdentity 的管理员；local 独立使用下方名单。
@@ -26,3 +25,12 @@ max_seconds = 300   # 单次自然劝静最长时间，60–300 秒
 [reply]
 enabled = true
 mute_text = "好，我先安静 {duration}。" # 留空不回复命令；关闭 enabled 则均不确认
+
+# 可选：为某个群整体替换管理员规则，其他群继续使用全局设置。
+# [[groups]]
+# group_id = "987654321"
+# bot_account_id = "123456789"  # 不填或空字符串匹配该群所有机器人
+# route_scope = ""             # 不填匹配全部作用域；空字符串仅匹配无 scope
+# [groups.management]
+# source = "local"
+# admin_accounts = ["10001"]   # 空名单表示无人拥有管理权限，不回退到全局

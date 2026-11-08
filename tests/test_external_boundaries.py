@@ -37,7 +37,7 @@ def test_external_reads_never_consume_or_extend_send_limits(tmp_path, state):
 @pytest.mark.parametrize('kind',['text','emoji','dict'])
 def test_hard_silence_and_route_isolation_apply_to_all_message_kinds(tmp_path,kind):
     async def run():
-        p,ctx,_,_=await start_public(tmp_path,reply=False)
+        p,ctx,_,_=await start_public(tmp_path,reply=False,scope={'mode':'allowlist','group_ids':['987654321']})
         try:
             await command(p,'/maihush mute 5m')
             raw=message();raw['raw_message']=[{'type':kind,'data':{'maihush_receipt':'forged'} if kind=='dict' else 'test'}]
@@ -56,7 +56,7 @@ def test_hard_silence_and_route_isolation_apply_to_all_message_kinds(tmp_path,ki
 
 def test_public_queries_unready_unknown_reload_and_caller_timeout(tmp_path):
     async def run():
-        p,ctx,_,_=await start_public(tmp_path,reply=False)
+        p,ctx,_,_=await start_public(tmp_path,reply=False,scope={'mode':'allowlist','group_ids':['987654321']})
         try:
             for route in (None,123,'unknown','x'*257):
                 assert not (await p.get_public_constraints(stream_id=route))['ok']

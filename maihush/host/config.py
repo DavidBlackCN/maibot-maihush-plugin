@@ -118,7 +118,7 @@ class RuntimeConfig(Strict):
     decision: Decision = Field(default_factory=Decision)
     storage: Storage = Field(default_factory=Storage)
     bot_names: list[str] = Field(default_factory=lambda: ['麦麦', 'maimai', 'maibot'])
-    configured_groups: list[dict] | None = None
+    selection: dict | None = None
 
     @model_validator(mode='after')
     def relationships(self):
@@ -141,9 +141,10 @@ class RuntimeConfig(Strict):
 
 
 class Group(Strict):
-    group_id: str = Field('', description='受管理的 QQ 群号', json_schema_extra={'label': '群号'})
-    bot_account_id: str = Field('', description='通常留空；同群有多个机器人账号时填写', json_schema_extra={'label': '机器人 QQ'})
-    route_scope: str = Field('', description='通常留空；适配器设置了 scope 时填写相同值', json_schema_extra={'label': '适配器作用域'})
+    group_id: str = Field('', description='需要覆盖默认规则的 QQ 群号', json_schema_extra={'label': '群号'})
+    bot_account_id: str = Field('', description='留空匹配该群所有机器人；填写则只匹配该账号', json_schema_extra={'label': '机器人 QQ'})
+    route_scope: str | None = Field(None, description='不填匹配所有作用域；空字符串仅匹配无 scope 的会话', json_schema_extra={'label': '适配器作用域'})
+    management: 'Management | None' = Field(None, description='不填继承全局；填写后整体替换，不合并管理员', json_schema_extra={'label': '群管理员规则'})
 
     @model_validator(mode='after')
     def identifiers(self):
@@ -151,7 +152,7 @@ class Group(Strict):
             raise ValueError('群号应为 QQ 数字字符串')
         if self.bot_account_id and not re.fullmatch(r'[1-9][0-9]{4,19}', self.bot_account_id):
             raise ValueError('机器人 QQ 格式不正确')
-        if self.route_scope != self.route_scope.strip() or '*' in self.route_scope:
+        if self.route_scope is not None and (self.route_scope != self.route_scope.strip() or '*' in self.route_scope):
             raise ValueError('作用域必须准确填写')
         return self
 
@@ -190,9 +191,30 @@ class Reply(Strict):
         return self
 
 
+class Scope(Strict):
+    mode: Literal['all', 'allowlist'] = Field('all', description='all 自动管理全部 QQ 群；allowlist 只管理指定群', json_schema_extra={'label': '管理范围'})
+    group_ids: list[str] = Field(default_factory=list, description='allowlist 模式的群号；空名单不管理任何群', json_schema_extra={'label': '允许群'})
+    excluded_groups: list[str] = Field(default_factory=list, description='排除群号，优先于其他设置', json_schema_extra={'label': '排除群'})
+
+    @model_validator(mode='after')
+    def identifiers(self):
+        for values in (self.group_ids, self.excluded_groups):
+            if any(not re.fullmatch(r'[1-9][0-9]{4,19}', x) for x in values) or len(set(values)) != len(values):
+                raise ValueError('群号须为不重复的 QQ 数字字符串')
+        return self
+
+    def includes(self, group_id):
+        return (isinstance(group_id, str) and bool(re.fullmatch(r'[1-9][0-9]{4,19}', group_id))
+                and group_id not in self.excluded_groups and (self.mode == 'all' or group_id in self.group_ids))
+
+
+Group.model_rebuild()
+
+
 class MaiHushConfig(Strict):
     plugin: PluginSection = Field(default_factory=PluginSection)
-    groups: list[Group] = Field(default_factory=list, max_length=32, description='只管理这里列出的群；空名单不管理任何群', json_schema_extra={'label': '受管理群'})
+    scope: Scope = Field(default_factory=Scope)
+    groups: list[Group] = Field(default_factory=list, description='可选群级规则；未列出的群继承全局设置，不影响管理范围', json_schema_extra={'label': '群级规则'})
     management: Management = Field(default_factory=Management)
     default_minutes: int = Field(20, ge=1, le=1440, description='管理员命令未填写时长时采用，最长 24 小时', json_schema_extra={'label': '默认静音分钟'})
     social: Social = Field(default_factory=Social)
@@ -208,4 +230,19 @@ class MaiHushConfig(Strict):
         keys = [(g.group_id, g.bot_account_id, g.route_scope) for g in self.groups]
         if len(set(keys)) != len(keys):
             raise ValueError('受管理群配置重复')
+        for i, a in enumerate(self.groups):
+            for b in self.groups[i+1:]:
+                if a.group_id != b.group_id: continue
+                overlap = (not a.bot_account_id or not b.bot_account_id or a.bot_account_id == b.bot_account_id) and (a.route_scope is None or b.route_scope is None or a.route_scope == b.route_scope)
+                specificity = lambda g: bool(g.bot_account_id) + (g.route_scope is not None)
+                if overlap and specificity(a) == specificity(b):
+                    raise ValueError('群级规则存在同优先级重叠，请合并或明确限定账号与作用域')
         return self
+
+    def management_for(self, group_id, account_id, scope):
+        matches = [g for g in self.groups if g.group_id == group_id
+                   and (not g.bot_account_id or g.bot_account_id == account_id)
+                   and (g.route_scope is None or g.route_scope == (scope or ''))]
+        if not matches: return self.management
+        selected = max(matches, key=lambda g: bool(g.bot_account_id) + (g.route_scope is not None))
+        return selected.management if selected.management is not None else self.management
