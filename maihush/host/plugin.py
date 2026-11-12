@@ -406,7 +406,7 @@ class MaiHushPlugin(MaiBotPlugin):
 
     @API('get_contract',version='1',public=True)
     async def get_contract(self,**kwargs):
-        return {'api_version':1,'ok':True,'data':{'contract_version':'1.2.0','plugin':'MaiHush','plugin_version':'0.4.0',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':'per_group','default_administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
+        return {'api_version':1,'ok':True,'data':{'contract_version':'1.2.0','plugin':'MaiHush','plugin_version':'0.4.1',**runtime_descriptor(),'hard_control':'local_command_only','administrator_source':'per_group','default_administrator_source':self.settings.management.source,'acknowledgement':'one_use_envelope','cross_plugin_write':'unsupported','guard_scope':'send_service_while_registered','autonomous_mode':'opt_in_restraint_only','recovery_policy':'bounded_social_invitation'},'error':None}
 
     @API('get_state',version='1',public=True)
     async def get_state(self,**kwargs):
